@@ -1,5 +1,6 @@
 import { spawn } from 'child_process'
 import { EventEmitter } from 'events'
+import * as path from 'path'
 import * as fs from 'fs'
 
 // Singleton instance
@@ -12,10 +13,9 @@ export class S3Uploader extends EventEmitter {
     private constructor() {
         super()
         this.environment = process.env.ENVIRON || 'local'
-        this.defaultBucketName =
-            this.environment === 'preprod'
-                ? 'preprod-meeting-baas-logs'
-                : 'meeting-baas-logs'
+        this.defaultBucketName = this.environment === 'preprod' 
+            ? 'preprod-meeting-baas-logs' 
+            : 'meeting-baas-logs'
     }
 
     public static getInstance(): S3Uploader {
@@ -41,7 +41,7 @@ export class S3Uploader extends EventEmitter {
     ): Promise<string> {
         try {
             await this.checkFileExists(filePath)
-
+            
             const s3FullPath = `s3://${bucketName}/${s3Path}`
             const s3Args: string[] = []
 
@@ -74,15 +74,8 @@ export class S3Uploader extends EventEmitter {
                 })
 
                 awsProcess.on('error', (error) => {
-                    this.emit(
-                        'error',
-                        `Failed to start AWS CLI process: ${error.message}`,
-                    )
-                    reject(
-                        new Error(
-                            `AWS CLI process failed to start: ${error.message}`,
-                        ),
-                    )
+                    this.emit('error', `Failed to start AWS CLI process: ${error.message}`)
+                    reject(new Error(`AWS CLI process failed to start: ${error.message}`))
                 })
 
                 awsProcess.on('close', (code) => {
@@ -107,21 +100,54 @@ export class S3Uploader extends EventEmitter {
         s3Path: string,
     ): Promise<string> {
         try {
-            return await this.uploadFile(
-                filePath,
-                this.defaultBucketName,
-                s3Path,
-            )
+            return await this.uploadFile(filePath, this.defaultBucketName, s3Path)
         } catch (error: any) {
-            this.emit(
-                'error',
-                `Failed to upload to default bucket: ${error.message}`,
-            )
+            this.emit('error', `Failed to upload to default bucket: ${error.message}`)
+            throw error
+        }
+    }
+
+    public async uploadDirectory(
+        localDir: string,
+        bucketName: string,
+        s3Prefix: string,
+    ): Promise<string[]> {
+        try {
+            await this.checkFileExists(localDir)
+            const files = await fs.promises.readdir(localDir)
+            const uploadPromises: Promise<string>[] = []
+
+            for (const file of files) {
+                const localPath = path.join(localDir, file)
+                const stats = await fs.promises.stat(localPath)
+                
+                if (stats.isFile()) {
+                    const s3Path = `${s3Prefix}/${file}`
+                    uploadPromises.push(
+                        this.uploadFile(localPath, bucketName, s3Path)
+                            .catch((error: any) => {
+                                this.emit('error', `Failed to upload file ${file}: ${error.message}`)
+                                return null
+                            })
+                    )
+                }
+            }
+
+            const results = await Promise.all(uploadPromises)
+            return results.filter((result): result is string => result !== null)
+        } catch (error: any) {
+            this.emit('error', `Failed to upload directory: ${error.message}`)
             throw error
         }
     }
 }
 
 // Export utility functions that use the singleton instance
-export const s3cp = (local: string, s3path: string): Promise<string> =>
+export const s3cp = (local: string, s3path: string): Promise<string> => 
     S3Uploader.getInstance().uploadToDefaultBucket(local, s3path)
+
+export const s3cpToBucket = (local: string, bucketName: string, s3path: string): Promise<string> => 
+    S3Uploader.getInstance().uploadFile(local, bucketName, s3path)
+
+export const s3cpDirectory = (localDir: string, bucketName: string, s3Prefix: string): Promise<string[]> => 
+    S3Uploader.getInstance().uploadDirectory(localDir, bucketName, s3Prefix)

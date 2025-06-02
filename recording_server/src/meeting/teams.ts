@@ -239,33 +239,33 @@ export class TeamsProvider implements MeetingProviderInterface {
 
         await takeScreenshot(page, 'afterjoinnow')
 
-        // Wait to be in the meeting
-        console.log('Waiting to confirm meeting join...')
-        let inMeeting = false
+        // Attendre d'être dans le meeting
+        console.log('Waiting to confirm meeting join...');
+        let inMeeting = false;
 
         while (!inMeeting) {
-            // Check if we have been refused
+            // Vérifier si on a été refusé
             const botNotAccepted = await isBotNotAccepted(page)
             if (botNotAccepted) {
                 throw new JoinError(JoinErrorCode.BotNotAccepted)
             }
 
-            // Check if we should cancel
+            // Vérifier si on doit annuler
             if (cancelCheck()) {
                 throw new JoinError(JoinErrorCode.ApiRequest)
             }
 
-            // Check if we are in the meeting (multiple indicators)
-            inMeeting = await isInTeamsMeeting(page)
-
+            // Vérifier si on est dans le meeting (plusieurs indicateurs)
+            inMeeting = await isInTeamsMeeting(page);
+            
             if (!inMeeting) {
                 await sleep(1000)
             }
         }
 
-        console.log('Successfully confirmed we are in the meeting')
+        console.log('Successfully confirmed we are in the meeting');
 
-        // Once in the meeting, configure the view
+        // Une fois dans le meeting, configurer la vue
         try {
             if (await clickWithInnerText(page, 'button', 'View', 10, false)) {
                 if (meetingParams.recording_mode !== 'gallery_view') {
@@ -613,38 +613,32 @@ async function ensurePageLoaded(page: Page, timeout = 20000): Promise<boolean> {
     }
 }
 
-// New function to check if we are in the Teams meeting
+// Nouvelle fonction pour vérifier si on est dans le meeting Teams
 async function isInTeamsMeeting(page: Page): Promise<boolean> {
     try {
         const indicators = [
-            // The React button is a good indicator that we are in the meeting
+            // Le bouton React est un bon indicateur qu'on est dans le meeting
             await clickWithInnerText(page, 'button', 'React', 1, false),
-
+            
             // Le bouton Raise hand aussi
-            await page
-                .locator('button#raisehands-button:has-text("Raise")')
-                .isVisible(),
-
+            await page.locator('button#raisehands-button:has-text("Raise")').isVisible(),
+            
             // La présence du chat
-            await page
-                .locator('button[aria-label*="chat"], button[title*="chat"]')
-                .isVisible(),
-
+            await page.locator('button[aria-label*="chat"], button[title*="chat"]').isVisible(),
+            
             // L'absence des textes de waiting room
             !(await isBotNotAccepted(page)),
+            
+            // L'absence du bouton Join now (qui n'existe que dans la waiting room)
+            !(await clickWithInnerText(page, 'button', 'Join now', 1, false))
+        ];
 
-            // The absence of the Join now button (which only exists in the waiting room)
-            !(await clickWithInnerText(page, 'button', 'Join now', 1, false)),
-        ]
-
-        const confirmedIndicators = indicators.filter(Boolean).length
-        console.log(
-            `Teams meeting presence indicators: ${confirmedIndicators}/5`,
-        )
-
-        return confirmedIndicators >= 3
+        const confirmedIndicators = indicators.filter(Boolean).length;
+        console.log(`Teams meeting presence indicators: ${confirmedIndicators}/5`);
+        
+        return confirmedIndicators >= 3;
     } catch (error) {
-        console.error('Error checking if in Teams meeting:', error)
-        return false
+        console.error('Error checking if in Teams meeting:', error);
+        return false;
     }
 }

@@ -33,6 +33,8 @@ export class Streaming {
 
     // Sound level monitoring
     private currentSoundLevel: number = 0
+    private lastSoundLogTime_ms: number = 0
+    private readonly SOUND_LOG_INTERVAL_MS: number = 500 // Log maximum every 500ms (2 times per second)
 
     // Statistiques pour le débogage
     private audioPacketsReceived: number = 0
@@ -351,21 +353,24 @@ export class Streaming {
             normalizedLevel = Math.max(0, Math.min(100, db + 60))
         }
 
-        // Mise à jour du niveau sonore actuel (au lieu du maximum historique)
+        // Always update the current sound level for real-time detection
         this.currentSoundLevel = normalizedLevel
 
-        // Write directly to file on each analysis
+        // Only log to file if enough time has passed (throttling to max 2 times per second)
         const now = Date.now()
-        const timestamp = new Date(now).toISOString()
-        const logEntry = `${timestamp},${normalizedLevel.toFixed(2)}\n`
+        if (now - this.lastSoundLogTime_ms >= this.SOUND_LOG_INTERVAL_MS) {
+            const timestamp = new Date(now).toISOString()
+            const logEntry = `${timestamp},${normalizedLevel.toFixed(2)}\n`
 
-        try {
-            // Obtenir le chemin du fichier
-            const soundLogPath = PathManager.getInstance(this.botId).getSoundLogPath()
-            // Write directly to file
-            await fs.promises.appendFile(soundLogPath, logEntry)
-        } catch (error) {
-            console.error(`Error writing to sound log: ${error}`)
+            try {
+                // Obtenir le chemin du fichier
+                const soundLogPath = PathManager.getInstance(this.botId).getSoundLogPath()
+                // Write directly to file
+                await fs.promises.appendFile(soundLogPath, logEntry)
+                this.lastSoundLogTime_ms = now
+            } catch (error) {
+                console.error(`Error writing to sound log: ${error}`)
+            }
         }
     }
 

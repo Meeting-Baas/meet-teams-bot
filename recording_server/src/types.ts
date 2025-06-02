@@ -1,5 +1,6 @@
 import { Browser, BrowserContext, Page } from '@playwright/test'
 
+
 export type Meeting = {
     page: Page
     backgroundPage: Page
@@ -88,6 +89,7 @@ export type MeetingParams = {
     extra?: any
     zoom_sdk_id?: string
     zoom_sdk_pwd?: string
+    transcription_custom_parameters?: object
 }
 
 export class CancellationToken {

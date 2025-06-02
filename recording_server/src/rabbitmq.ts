@@ -17,6 +17,7 @@ import { Api } from './api/methods'
 import { setupForceTermination } from './main'
 import { GrafanaService } from './utils/GrafanaService'
 import { redirectLogsToBot } from './utils/Logger'
+import { startSystemMonitor } from './utils/system-monitor'
 
 const NODE_NAME = process.env.NODE_NAME
 
@@ -80,15 +81,15 @@ export class Consumer {
         handler: (data: MeetingParams) => Promise<void>,
     ): Promise<StartRecordingResult> {
         return new Promise((resolve, reject) => {
-            let isProcessing = false
+            let isProcessing = false;
             this.channel
                 .consume(Consumer.QUEUE_NAME, async (message) => {
                     if (isProcessing) {
-                        console.log('Already processing a message, skipping...')
-                        return
+                        console.log('Already processing a message, skipping...');
+                        return;
                     }
-
-                    isProcessing = true
+                    
+                    isProcessing = true;
                     console.log(`consume message : ${message}`)
                     if (message !== null) {
                         try {
@@ -150,25 +151,29 @@ export class Consumer {
         })
     }
 
-    // throw error if start recoridng fail
+    // throw error if start recording fails.
     static async handleStartRecord(data: MeetingParams) {
         console.log('handleStartRecord')
-
+        
         const grafanaService = GrafanaService.getInstance()
-
+        
         // Mettre à jour la configuration de Grafana Agent
         grafanaService.setBotUuid(data.bot_uuid)
         await grafanaService.updateGrafanaAgentWithBotUuid()
-
+        
         // Redirect logs to bot-specific file
-        console.log('About to redirect logs to bot:', data.bot_uuid)
-        await redirectLogsToBot(data.bot_uuid)
-        console.log('Logs redirected successfully')
+        console.log('About to redirect logs to bot:', data.bot_uuid);
+        await redirectLogsToBot(data.bot_uuid);
+        console.log('Logs redirected successfully');
+
+        // Start system monitor for this bot
+        startSystemMonitor(data.bot_uuid, data.secret);
+        console.log('System monitor started for bot:', data.bot_uuid);
 
         // Set up force termination timer once we've received a message
         setupForceTermination({
             secret: data.secret,
-            bot_uuid: data.bot_uuid,
+            bot_uuid: data.bot_uuid
         })
 
         console.log('####### DATA #######', data)

@@ -107,7 +107,7 @@ export class SoundContext extends MediaContext {
 
     public play(pathname: string, loop: boolean) {
         // ffmpeg -stream_loop -1 -re -i La_bataille_de_Farador.mp4 -f alsa -ac 2 -ar 44100 hw:Loopback,1
-        // ffmpeg -re -i cow_sound.mp3 -f alsa -acodec pcm_s16le "pulse:virtual_mic"
+        // ffmpeg -re -i vache.mp3 -f alsa -acodec pcm_s16le "pulse:virtual_mic"
         let args: string[] = []
         if (loop) {
             args.push(`-stream_loop`, `-1`)

@@ -6,6 +6,8 @@ import { MeetingStateType, StateExecuteResult } from '../types'
 import { BaseState } from './base-state'
 
 export class PausedState extends BaseState {
+    
+
     async execute(): StateExecuteResult {
         try {
             // Marquer le début de la pause
@@ -34,12 +36,12 @@ export class PausedState extends BaseState {
             while (this.context.isPaused) {
                 await new Promise((resolve) => setTimeout(resolve, 100))
 
-                // Check if we should stop completely
+                // Vérifier si on doit arrêter complètement
                 if (this.context.endReason) {
                     return this.transition(MeetingStateType.Cleanup)
                 }
 
-                // Check if the pause has lasted too long
+                // Vérifier si la pause a duré trop longtemps
                 if (
                     Date.now() - pauseStartTime >
                     MEETING_CONSTANTS.RESUMING_TIMEOUT
@@ -68,7 +70,7 @@ export class PausedState extends BaseState {
 
     private async pauseRecording(): Promise<void> {
         const pausePromise = async () => {
-            // Pause the MediaRecorder in the browser
+            // Pause du MediaRecorder dans le navigateur
             await this.context.backgroundPage?.evaluate(() => {
                 const w = window as any
                 return w.pauseMediaRecorder?.()
