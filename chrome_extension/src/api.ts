@@ -7,10 +7,6 @@ type MessageType = 'SPEAKERS' | 'LOG' | 'UPLOAD_CHUNK' | 'UPLOAD_CHUNK_FINAL'
 // Yes, any is funny :cow:
 type MessagePayload = any
 
-export const sleep = (milliseconds: number) => {
-    return new Promise((resolve) => setTimeout(resolve, milliseconds))
-}
-
 export type RecordingMode = 'speaker_view' | 'gallery_view' | 'audio_only'
 
 export class ApiService {
