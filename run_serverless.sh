@@ -8,7 +8,6 @@ BOT_UUID=$(uuidgen)
 # Meeting parameters - modify these as needed
 STDIN='{
   "meeting_url": "https://meet.google.com/xdk-unmo-gex?authuser=0",
-  "user_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJpZCI6MX0.hZ2EOeazP82MbLsfQvdvV4nquazqSqlqD3-PVKidPsfaexIo_qiH69-xSISXxUAROikMbenDnkDN4dQG3v38fQ",
   "bots_api_key": "banane",
   "bot_name": "La Vache!",
   "speech_to_text_provider": "Default",
