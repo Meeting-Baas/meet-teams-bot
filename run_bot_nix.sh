@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Meet Teams Bot - Serverless Runner
-# This script provides an easy way to run the bot in serverless mode
+# Meet Teams Bot - Nix Serverless Runner
+# This script provides an easy way to run the bot in serverless mode using Nix
 
 set -e
 
@@ -43,34 +43,34 @@ generate_uuid() {
     fi
 }
 
-# Check if Docker and Docker Compose are available
-check_docker() {
-    if ! command -v docker &> /dev/null; then
-        print_error "Docker is not installed or not in PATH"
-        print_info "Please install Docker: https://docs.docker.com/get-docker/"
-        exit 1
-    fi
-    
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
-        print_error "Docker Compose is not available"
-        print_info "Please install Docker Compose or use Docker with compose plugin"
+# Check if Nix is available
+check_nix() {
+    if ! command -v nix-shell &> /dev/null; then
+        print_error "Nix is not installed or not in PATH"
+        print_info "Please install Nix: https://nixos.org/download.html"
         exit 1
     fi
 }
 
-# Build Docker image using Docker Compose
-build_image() {
-    print_info "Building Meet Teams Bot Docker image with optimized configuration..."
+# Setup environment and dependencies
+setup_environment() {
+    print_info "Setting up Nix environment and dependencies..."
     
-    # Use docker-compose if available, otherwise use docker compose
-    if command -v docker-compose &> /dev/null; then
-        docker-compose build --no-cache
-    else
-        docker compose build --no-cache
+    # Install dependencies if not already done
+    if [ ! -d "recording_server/node_modules" ] || [ ! -d "recording_server/chrome_extension/node_modules" ]; then
+        print_info "Installing dependencies..."
+        nix-shell --run "npm install --prefix recording_server && npm install --prefix recording_server/chrome_extension"
     fi
     
-    print_success "Optimized Docker image built successfully"
-    print_info "Configuration: 4 CPU cores, 7GB RAM, 6GB Node.js heap"
+    # Build if not already done or if source files are newer
+    if [ ! -d "recording_server/build" ] || [ ! -d "recording_server/chrome_extension/dist" ] || \
+       [ "recording_server/src" -nt "recording_server/build" ] || \
+       [ "recording_server/chrome_extension/src" -nt "recording_server/chrome_extension/dist" ]; then
+        print_info "Building projects..."
+        nix-shell --run "npm run build --prefix recording_server && npm run build-dev --prefix recording_server/chrome_extension"
+    fi
+    
+    print_success "Environment ready"
 }
 
 # Create output directory
@@ -131,14 +131,14 @@ run_with_config() {
     
     local processed_config=$(process_config "$config_json")
     
-    print_info "Running Meet Teams Bot with optimized configuration: $config_file"
+    print_info "Running Meet Teams Bot (Nix) with configuration: $config_file"
     if [ -n "$override_meeting_url" ]; then
         print_info "Meeting URL: $override_meeting_url"
     fi
     print_info "Output directory: $output_dir"
-    print_info "Performance: 4 CPU cores, 7GB RAM (Docker Compose)"
+    print_info "Environment: Nix (Node.js 20, Webpack 5, TypeScript 5)"
     
-    # Debug: Show what we're sending to Docker (first 200 chars)
+    # Debug: Show what we're sending to the bot (first 200 chars)
     local preview=$(echo "$processed_config" | head -c 200)
     print_info "Config preview: ${preview}..."
     
@@ -149,12 +149,9 @@ run_with_config() {
         exit 1
     fi
     
-    # Run using Docker Compose with optimized configuration
-    if command -v docker-compose &> /dev/null; then
-        echo "$processed_config" | docker-compose run --rm -T meet-teams-bot
-    else
-        echo "$processed_config" | docker compose run --rm -T meet-teams-bot
-    fi
+    # Set SERVERLESS=true and run the bot
+    export SERVERLESS=true
+    echo "$processed_config" | nix-shell --run "cd recording_server && node build/src/main.js"
     
     print_success "Bot execution completed"
     print_info "Recordings saved to: $output_dir"
@@ -175,11 +172,11 @@ run_with_json() {
     local output_dir=$(create_output_dir)
     local processed_config=$(process_config "$json_input")
     
-    print_info "Running Meet Teams Bot with optimized JSON configuration"
+    print_info "Running Meet Teams Bot (Nix) with provided JSON configuration"
     print_info "Output directory: $output_dir"
-    print_info "Performance: 4 CPU cores, 7GB RAM (Docker Compose)"
+    print_info "Environment: Nix (Node.js 20, Webpack 5, TypeScript 5)"
     
-    # Debug: Show what we're sending to Docker (first 200 chars)
+    # Debug: Show what we're sending to the bot (first 200 chars)
     local preview=$(echo "$processed_config" | head -c 200)
     print_info "Config preview: ${preview}..."
     
@@ -190,12 +187,9 @@ run_with_json() {
         exit 1
     fi
     
-    # Run using Docker Compose with optimized configuration
-    if command -v docker-compose &> /dev/null; then
-        echo "$processed_config" | docker-compose run --rm -T meet-teams-bot
-    else
-        echo "$processed_config" | docker compose run --rm -T meet-teams-bot
-    fi
+    # Set SERVERLESS=true and run the bot
+    export SERVERLESS=true
+    echo "$processed_config" | nix-shell --run "cd recording_server && node build/src/main.js"
     
     print_success "Bot execution completed"
     print_info "Recordings saved to: $output_dir"
@@ -210,122 +204,55 @@ run_with_json() {
     fi
 }
 
-# Complete cleanup: Docker containers, images, volumes, cache, and files
-clean() {
-    print_warning "This will perform a COMPLETE cleanup:"
-    echo "  • Stop and remove all meet-teams-bot containers"
-    echo "  • Remove meet-teams-bot Docker images"
-    echo "  • Remove unused Docker volumes and networks"
-    echo "  • Clean Docker cache and build cache"
-    echo "  • Delete all recordings and temporary files"
-    echo
-    read -p "Are you sure you want to continue? (y/N): " -n 1 -r
-    echo
-    
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_info "Operation cancelled"
-        return
-    fi
-    
-    print_info "Starting complete cleanup..."
-    
-    # 1. Stop and remove containers
-    print_info "Stopping and removing meet-teams-bot containers..."
-    if command -v docker-compose &> /dev/null; then
-        docker-compose down --remove-orphans 2>/dev/null || true
-    else
-        docker compose down --remove-orphans 2>/dev/null || true
-    fi
-    
-    # Remove any remaining containers
-    docker ps -a --filter "ancestor=meet-teams-bot" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
-    docker ps -a --filter "name=meet-teams-bot" --format "{{.ID}}" | xargs -r docker rm -f 2>/dev/null || true
-    
-    # 2. Remove images
-    print_info "Removing meet-teams-bot Docker images..."
-    docker images "meet-teams-bot" --format "{{.ID}}" | xargs -r docker rmi -f 2>/dev/null || true
-    
-    # 3. Clean Docker system
-    print_info "Cleaning Docker system (unused containers, networks, images)..."
-    docker system prune -f 2>/dev/null || true
-    
-    # 4. Clean Docker build cache
-    print_info "Cleaning Docker build cache..."
-    docker builder prune -f 2>/dev/null || true
-    
-    # 5. Remove unused volumes
-    print_info "Removing unused Docker volumes..."
-    docker volume prune -f 2>/dev/null || true
-    
-    # 6. Clean recordings directory
-    print_info "Cleaning recordings directory..."
+# Clean recordings directory
+clean_recordings() {
     local output_dir="./recordings"
     if [ -d "$output_dir" ]; then
-        rm -rf "$output_dir"/*
-        print_success "Recordings directory cleaned"
+        print_warning "This will delete all files in $output_dir"
+        read -p "Are you sure? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            rm -rf "$output_dir"/*
+            print_success "Recordings directory cleaned"
+        else
+            print_info "Operation cancelled"
+        fi
+    else
+        print_info "No recordings directory to clean"
     fi
-    
-    # 7. Clean temporary files
-    print_info "Cleaning temporary files..."
-    find . -name "*.tmp" -type f -delete 2>/dev/null || true
-    find . -name ".DS_Store" -type f -delete 2>/dev/null || true
-    find . -name "Thumbs.db" -type f -delete 2>/dev/null || true
-    
-    # 8. Clean any leftover Chrome profiles or browser data
-    print_info "Cleaning browser temporary data..."
-    find . -path "**/chrome-*" -type d -exec rm -rf {} + 2>/dev/null || true
-    find . -path "**/tmp-*" -type d -exec rm -rf {} + 2>/dev/null || true
-    
-    print_success "Complete cleanup finished!"
-    print_info "Summary:"
-    echo "  ✅ Docker containers stopped and removed"
-    echo "  ✅ Docker images cleaned"
-    echo "  ✅ Docker cache and volumes pruned"
-    echo "  ✅ Recordings directory cleaned"
-    echo "  ✅ Temporary files removed"
-    echo
-    print_info "You can now run './run_bot.sh build' to rebuild the optimized image"
 }
 
 # Show help
 show_help() {
-    echo "Meet Teams Bot - Optimized Serverless Runner"
+    echo "Meet Teams Bot - Nix Serverless Runner"
     echo
     echo "Usage:"
-    echo "  $0 build                     - Build optimized Docker image (Docker Compose)"
+    echo "  $0 setup                     - Setup Nix environment and build dependencies"
     echo "  $0 run <config_file> [url]   - Run bot with configuration file (optional meeting URL override)"
     echo "  $0 run-json '<json>'         - Run bot with JSON configuration"
-    echo "  $0 clean                     - Complete cleanup (Docker + files)"
+    echo "  $0 clean                     - Clean recordings directory"
     echo "  $0 help                      - Show this help message"
     echo
     echo "Examples:"
-    echo "  $0 build"
+    echo "  $0 setup"
     echo "  $0 run params.json"
     echo "  $0 run params.json 'https://meet.google.com/new-meeting-url'"
     echo "  $0 run-json '{\"meeting_url\":\"https://meet.google.com/abc-def-ghi\", \"bot_name\":\"RecordingBot\"}'"
     echo "  $0 clean"
     echo
-    echo "Performance Optimizations (Built-in):"
-    echo "  • 4 CPU cores limit for optimal performance"
-    echo "  • 7GB RAM allocation for video processing"
-    echo "  • 6GB Node.js heap size (optimized)"
-    echo "  • Docker Compose with resource management"
-    echo "  • Serverless mode enabled by default"
-    echo
     echo "Features:"
+    echo "  • Uses Nix environment (Node.js 20, Webpack 5, TypeScript 5)"
     echo "  • Automatically generates bot_uuid if not provided"
     echo "  • Override meeting URL by passing it as last argument"
     echo "  • Saves recordings to ./recordings directory"
     echo "  • Lists generated files after completion"
-    echo "  • Performance monitoring and resource limits"
+    echo "  • Auto-setup of dependencies and build if needed"
     echo
-    echo "Clean Command:"
-    echo "  The 'clean' command performs a complete cleanup:"
-    echo "  • Stops and removes all meet-teams-bot containers"
-    echo "  • Removes meet-teams-bot Docker images"
-    echo "  • Cleans Docker cache, volumes, and networks"
-    echo "  • Deletes all recordings and temporary files"
-    echo "  • Removes browser temporary data"
+    echo "Environment:"
+    echo "  • Node.js 20 (modern)"
+    echo "  • Webpack 5 + TypeScript 5"
+    echo "  • Native macOS performance (no Docker overhead)"
+    echo "  • Compatible with NixOS for production scaling"
     echo
     echo "Configuration file should contain JSON with meeting parameters."
     echo "See params.json for example format."
@@ -334,9 +261,9 @@ show_help() {
 # Main script logic
 main() {
     case "${1:-}" in
-        "build")
-            check_docker
-            build_image
+        "setup")
+            check_nix
+            setup_environment
             ;;
         "run")
             if [ -z "${2:-}" ]; then
@@ -344,7 +271,8 @@ main() {
                 print_info "Usage: $0 run <config_file> [meeting_url]"
                 exit 1
             fi
-            check_docker
+            check_nix
+            setup_environment
             run_with_config "$2" "$3"
             ;;
         "run-json")
@@ -353,12 +281,12 @@ main() {
                 print_info "Usage: $0 run-json '<json_config>'"
                 exit 1
             fi
-            check_docker
+            check_nix
+            setup_environment
             run_with_json "$2"
             ;;
         "clean")
-            check_docker
-            clean
+            clean_recordings
             ;;
         "help"|"-h"|"--help"|"")
             show_help
