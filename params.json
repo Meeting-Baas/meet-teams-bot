@@ -7,7 +7,7 @@
     "bot_uuid": "unique-bot-identifier",
     "recording_mode": "SpeakerView",
     "mp4_s3_path": "recordings/output.mp4",
-    "custom_branding_bot_path": "https://your-domain.com/path/to/branding-image.jpg",
+    "custom_branding_bot_path": "https://i.ibb.co/N9YtnDZ/ducobu.jpg",
     "automatic_leave": {
       "waiting_room_timeout": 60,
       "noone_joined_timeout": 60
