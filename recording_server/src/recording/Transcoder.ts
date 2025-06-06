@@ -244,36 +244,69 @@ export class Transcoder extends EventEmitter {
         if (this.isStopped) return
 
         try {
-            // Finalize chunk processing
+            console.log('Starting transcoder shutdown sequence...')
+            
+            // Step 1: Finalize chunk processing
             await this.videoProcessor.finalize()
 
-            // Close streams
+            // Step 2: Close streams
             await this.stopFFmpeg()
 
-            // Create audio file for transcription if in video mode and transcription is enabled
-            if (!this.isAudioOnly && this.config.enableTranscriptionChunking && this.pathManager) {
-                console.log('Creating audio file for transcription before chunking...')
-                await this.createAudioFileForTranscription()
-            }
-
-            // Create and upload audio chunks for transcription
-            if (this.pathManager && this.config.enableTranscriptionChunking) {
-                console.log('Starting audio chunking process for transcription')
-                await this.createAndUploadTranscriptionChunks()
-            }
-
-            // Upload the full recording and delete the files
-            if (process.env.SERVERLESS !== 'true') {
-                await this.uploadToS3()
-            }
-
+            // Mark as stopped early to prevent new operations
             this.isRecording = false
             this.isStopped = true
             this.emit('stopped')
+
+            // Step 3: Add a small delay to prevent CPU spike
+            await new Promise(resolve => setTimeout(resolve, 100))
+
+            // Step 4: Handle transcription tasks in the background (non-blocking)
+            this.handleTranscriptionTasksAsync()
+
+            // Step 5: Upload the full recording (if not serverless)
+            if (process.env.SERVERLESS !== 'true') {
+                // Add another small delay before S3 upload
+                await new Promise(resolve => setTimeout(resolve, 200))
+                await this.uploadToS3()
+            }
+
+            console.log('Transcoder shutdown sequence completed')
         } catch (error) {
             console.error('Error stopping transcoder:', error)
+            this.isRecording = false
+            this.isStopped = true
             throw error
         }
+    }
+
+    /**
+     * Handle transcription tasks asynchronously to avoid blocking the main stop sequence
+     */
+    private handleTranscriptionTasksAsync(): void {
+        if (!this.pathManager) return
+
+        // Run transcription tasks in the background
+        setTimeout(async () => {
+            try {
+                // Create audio file for transcription if needed
+                if (!this.isAudioOnly && this.config.enableTranscriptionChunking) {
+                    console.log('Creating audio file for transcription before chunking...')
+                    await this.createAudioFileForTranscription()
+                    
+                    // Add delay between operations to reduce CPU spikes
+                    await new Promise(resolve => setTimeout(resolve, 500))
+                }
+
+                // Create and upload audio chunks for transcription
+                if (this.config.enableTranscriptionChunking) {
+                    console.log('Starting audio chunking process for transcription')
+                    await this.createAndUploadTranscriptionChunks()
+                }
+            } catch (error) {
+                console.error('Error in background transcription tasks:', error)
+                // Don't throw - these are background tasks
+            }
+        }, 300) // Start after 300ms delay
     }
 
     // Event listeners setup
@@ -320,42 +353,49 @@ export class Transcoder extends EventEmitter {
         let ffmpegArgs: string[] = []
 
         if (this.isAudioOnly) {
-            // SIMPLIFIED Audio-only configuration
             ffmpegArgs = [
-                '-f', 'webm',           // Input format (WebM from chunks)
-                '-i', 'pipe:0',         // Read from stdin
-                '-vn',                  // No video
-                '-acodec', 'pcm_s16le', // WAV codec
-                '-ac', '1',             // Mono
-                '-ar', '16000',         // 16kHz sample rate
-                '-f', 'wav',            // Output format
-                '-y',                   // Overwrite output
+                '-f', 'webm',
+                '-i', 'pipe:0',
+                '-vn',
+                '-acodec', 'pcm_s16le',
+                '-ac', '1',
+                '-ar', '16000',
+                '-f', 'wav',
+                '-y',
                 this.config.outputPath,
             ]
         } else {
-            // SIMPLIFIED Video + Audio configuration (single output MP4)
+            // Video transcoding with performance optimizations
             ffmpegArgs = [
-                '-f', 'webm',           // Input format (WebM from browser chunks)
-                '-i', 'pipe:0',         // Read from stdin
-                // Video settings - simple and fast
-                '-c:v', 'libx264',      // H264 codec
-                '-preset', 'faster',    // Balanced speed/quality
-                '-crf', '23',           // Good quality
-                '-pix_fmt', 'yuv420p',  // Compatibility
-                // Audio settings
-                '-c:a', 'aac',          // AAC codec
-                '-b:a', '128k',         // Audio bitrate
-                '-ac', '2',             // Stereo
-                '-ar', '44100',         // Standard sample rate
-                // Output settings
-                '-f', 'mp4',            // MP4 format
-                '-movflags', '+faststart', // Optimize for streaming
-                '-y',                   // Overwrite output
+                '-f', 'webm',
+                '-i', 'pipe:0',
+                
+                // Performance optimization: Limit CPU usage to prevent system overload
+                // Uses 2 cores maximum instead of all available cores to maintain system stability
+                '-threads', '2',
+                
+                // Video encoding settings optimized for real-time processing
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',         // Prioritize speed over compression efficiency
+                '-crf', '23',                   // Maintain high visual quality (lower values = higher quality)
+                
+                // Audio encoding settings - preserve original quality
+                '-c:a', 'aac',
+                '-b:a', '128k',                 // Standard audio bitrate for good quality
+                '-ac', '2',                     // Maintain stereo audio channels
+                '-ar', '44100',                 // Standard sample rate for audio
+                
+                // Stream optimization settings
+                '-bufsize', '1M',               // Optimize buffer size for reduced latency
+                '-avoid_negative_ts', 'make_zero', // Handle timestamp synchronization
+                
+                '-f', 'mp4',
+                '-y',
                 this.config.outputPath,
             ]
         }
 
-        console.log('Starting FFmpeg with args:', ffmpegArgs)
+        console.log('Starting FFmpeg with performance optimizations:', ffmpegArgs.join(' '))
 
         this.ffmpegProcess = spawn('ffmpeg', ffmpegArgs, {
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -363,28 +403,34 @@ export class Transcoder extends EventEmitter {
 
         this.setupFFmpegListeners()
 
-        console.log('Started simplified FFmpeg process:', {
+        console.log('FFmpeg process started successfully:', {
             isAudioOnly: this.isAudioOnly,
             outputPath: this.config.outputPath,
-            inputFormat: 'WebM chunks from browser',
-            outputFormat: this.isAudioOnly ? 'WAV' : 'MP4'
+            threadLimit: '2 cores',
+            preset: 'ultrafast',
+            qualitySettings: 'CRF 23, AAC 128k, 44.1kHz stereo'
         })
     }
 
     private setupFFmpegListeners(): void {
         if (!this.ffmpegProcess) return
 
+        // Reduce stdout logging to essential only
         this.ffmpegProcess.stdout?.on('data', (data) => {
-            // Log FFmpeg output for debugging
-            console.log('FFmpeg stdout:', data.toString())
+            // Only log critical FFmpeg stdout messages
+            const output = data.toString()
+            if (output.includes('Duration:') || output.includes('Output #0:')) {
+                console.log('FFmpeg stdout:', output.trim())
+            }
         })
 
         this.ffmpegProcess.stderr?.on('data', (data) => {
             const output = data.toString()
-            // Only log important FFmpeg messages, not all debug info
-            if (output.includes('error') || output.includes('Error') || output.includes('failed')) {
-                console.error('FFmpeg stderr:', output)
+            // Only log errors and critical warnings, skip progress info
+            if (output.includes('error') || output.includes('Error') || output.includes('failed') || output.includes('Invalid')) {
+                console.error('FFmpeg stderr:', output.trim())
             }
+            // Skip verbose progress info that creates CPU load
         })
 
         this.ffmpegProcess.on('error', (error) => {

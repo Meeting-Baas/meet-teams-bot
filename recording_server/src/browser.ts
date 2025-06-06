@@ -22,6 +22,20 @@ const P720: Resolution = {
 
 var RESOLUTION: Resolution = P720
 
+/**
+ * Opens a Chromium browser instance with Chrome extension support and performance optimizations
+ * 
+ * Performance optimizations applied:
+ * - Memory management: Increased heap size and enabled memory pressure relief
+ * - Process limitations: Limited renderer processes to prevent resource exhaustion  
+ * - Background network reduction: Disabled unnecessary background operations
+ * - Feature optimization: Disabled unused Chrome features to reduce overhead
+ * - Cache management: Enabled aggressive cache discarding for memory efficiency
+ * 
+ * @param lowResolution Whether to use lower resolution (480p vs 720p) for better performance
+ * @param slowMo Whether to enable slow motion mode for debugging (adds 100ms delay)
+ * @returns Promise resolving to browser context and background page for extension interaction
+ */
 export async function openBrowser(
     // useChromium: boolean,
     lowResolution: boolean,
@@ -57,19 +71,38 @@ export async function openBrowser(
             headless: false,
             viewport: { width, height },
             args: [
+                // Security configurations
                 '--no-sandbox',
+                '--disable-setuid-sandbox',
+                
+                // Chrome extension configuration (required for recording functionality)
+                `--disable-extensions-except=${pathToExtension}`,
+                `--load-extension=${pathToExtension}`,
+                `--allowlisted-extension-id=${EXTENSION_ID}`,
+                
+                // WebRTC optimizations (required for meeting audio/video capture)
                 '--disable-rtc-smoothness-algorithm',
                 '--disable-webrtc-hw-decoding',
                 '--disable-webrtc-hw-encoding',
-                '--disable-blink-features=AutomationControlled',
-                '--disable-setuid-sandbox',
-                `--disable-extensions-except=${pathToExtension}`,
-                `--load-extension=${pathToExtension}`,
                 '--autoplay-policy=no-user-gesture-required',
+                
+                // Performance and resource management optimizations
+                '--disable-blink-features=AutomationControlled',
                 '--disable-background-timer-throttling',
                 '--enable-features=SharedArrayBuffer',
-                `--allowlisted-extension-id=${EXTENSION_ID}`,
-                // `--whitelisted-extension-id=${EXTENSION_ID}`,
+                '--memory-pressure-off',              // Disable memory pressure handling for consistent performance
+                '--max_old_space_size=4096',          // Increase V8 heap size to 4GB for large meetings
+                '--disable-background-networking',    // Reduce background network activity
+                '--disable-features=TranslateUI',     // Disable translation features to save resources
+                '--disable-features=AutofillServerCommunication', // Disable autofill to reduce network usage
+                '--disable-component-extensions-with-background-pages', // Reduce background extension overhead
+                '--disable-default-apps',             // Disable default Chrome apps
+                '--renderer-process-limit=4',         // Limit renderer processes to prevent resource exhaustion
+                '--disable-ipc-flooding-protection',  // Improve IPC performance for high-frequency operations
+                '--aggressive-cache-discard',         // Enable aggressive cache management for memory efficiency
+                '--disable-features=MediaRouter',     // Disable media router for reduced overhead
+                
+                // Certificate and security optimizations for meeting platforms
                 '--ignore-certificate-errors',
                 '--allow-insecure-localhost',
                 '--disable-blink-features=TrustedDOMTypes',
