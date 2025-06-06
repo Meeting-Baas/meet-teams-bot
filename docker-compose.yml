@@ -1,0 +1,37 @@
+services:
+  meet-teams-bot:
+    build: .
+    image: meet-teams-bot
+    container_name: meet-teams-bot
+    stdin_open: true
+    tty: true
+    
+    # Performance optimizations - Ready to use!
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'          # 4 CPU cores (optimal for meeting recording)
+          memory: 7168m        # 7GB RAM (sufficient for video processing)
+        reservations:
+          cpus: '1.0'          # Minimum guaranteed CPU
+          memory: 1024m        # Minimum guaranteed RAM
+    
+    # Optimized environment variables
+    environment:
+      - SERVERLESS=true                           # Enable serverless mode
+      - NODE_ENV=production                       # Production mode
+      - NODE_OPTIONS=--max-old-space-size=6144    # 6GB Node.js heap (85% of container RAM)
+      - UV_THREADPOOL_SIZE=4                      # Optimized thread pool
+      - DISPLAY=:99                               # Virtual display
+    
+    # Mount recordings directory
+    volumes:
+      - ./recordings:/app/recording_server/data
+    
+    # Restart policy for reliability
+    restart: unless-stopped
+    
+    # Resource monitoring labels
+    labels:
+      - "com.meetingbaas.service=recording-bot"
+      - "com.meetingbaas.performance=optimized" 
