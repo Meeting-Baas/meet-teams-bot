@@ -7,7 +7,8 @@
     "node": ">= 20.0.0"
   },
     "dependencies": {
-        "@playwright/test": "^1.50.1",
+        "@playwright/test": "1.50.1",
+        "playwright": "1.50.1",
         "@types/sharp": "^0.31.1",
         "amqplib": "^0.10.3",
         "async": "^3.2.6",
