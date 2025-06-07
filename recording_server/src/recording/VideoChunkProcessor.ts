@@ -104,7 +104,7 @@ export class VideoChunkProcessor extends EventEmitter {
 
     public async resume(): Promise<void> {
         this.isPaused = false
-        // Process paused chunks
+        // Traiter les chunks mis en pause
         const chunksToProcess = [...this.pausedChunks]
         this.pausedChunks = []
 
@@ -119,7 +119,7 @@ export class VideoChunkProcessor extends EventEmitter {
                 await this.resume()
             }
 
-            // Wait for all chunks to be processed
+            // Attendre que tous les chunks soient traités
             await new Promise<void>((resolve) => this.chunkQueue.drain(resolve))
 
             // Émettre l'événement de fin
@@ -127,7 +127,7 @@ export class VideoChunkProcessor extends EventEmitter {
                 totalChunks: this.chunkIndex,
             })
 
-            // Clean up listeners
+            // Nettoyer les listeners
             this.removeAllListeners('chunkReady')
             this.removeAllListeners('chunkProcessed')
             this.removeAllListeners('error')

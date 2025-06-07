@@ -1,10 +1,6 @@
 import { Events } from '../../events'
 import { JoinError, JoinErrorCode } from '../../types'
-import {
-    MeetingStateType,
-    RecordingEndReason,
-    StateExecuteResult,
-} from '../types'
+import { MeetingStateType, RecordingEndReason, StateExecuteResult } from '../types'
 import { BaseState } from './base-state'
 import { takeScreenshot } from '../../utils/takeScreenshot'
 
@@ -14,14 +10,14 @@ export class WaitingRoomState extends BaseState {
             console.info('Entering waiting room state')
             Events.inWaitingRoom()
 
-            // Get meeting information
+            // Obtenir les informations de la réunion
             const { meetingId, password } = await this.getMeetingInfo()
             console.info('Meeting info retrieved', {
                 meetingId,
                 hasPassword: !!password,
             })
 
-            // Generate the meeting link
+            // Générer le lien de réunion
             const meetingLink = this.context.provider.getMeetingLink(
                 meetingId,
                 password,
@@ -30,22 +26,22 @@ export class WaitingRoomState extends BaseState {
                 this.context.params.enter_message,
             )
 
-            // Open the meeting page
+            // Ouvrir la page de réunion
             await this.openMeetingPage(meetingLink)
-
-            // Start the dialog observer once the page is open
+            
+            // Démarrer l'observateur de dialogue dès que la page est ouverte
             this.startDialogObserver()
 
-            // Wait for acceptance into the meeting
+            // Attendre l'acceptation dans la réunion
             await this.waitForAcceptance()
             console.info('Successfully joined meeting')
 
-            // If everything is fine, move to the InCall state
+            // Si tout est OK, passer à l'état InCall
             return this.transition(MeetingStateType.InCall)
         } catch (error) {
             // Arrêter l'observateur en cas d'erreur
             this.stopDialogObserver()
-
+            
             console.error('Error in waiting room state:', error)
 
             if (error instanceof JoinError) {
@@ -102,10 +98,7 @@ export class WaitingRoomState extends BaseState {
             // Take screenshot if possible
             if (this.context.playwrightPage) {
                 try {
-                    await takeScreenshot(
-                        this.context.playwrightPage,
-                        'waiting-room-error',
-                    )
+                    await takeScreenshot(this.context.playwrightPage, 'waiting-room-error');
                     console.info('Error screenshot saved')
                 } catch (screenshotError) {
                     console.error(
@@ -128,19 +121,15 @@ export class WaitingRoomState extends BaseState {
             throw new Error('Meeting page not initialized')
         }
 
-        const timeoutMs =
-            this.context.params.automatic_leave.waiting_room_timeout * 1000
+        const timeoutMs = this.context.params.automatic_leave.waiting_room_timeout * 1000
         console.info(`Setting waiting room timeout to ${timeoutMs}ms`)
 
-        let joinSuccessful = false // Flag indicating we joined the meeting
+        let joinSuccessful = false;  // Flag pour indiquer si on est dans le meeting
 
         return new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                if (!joinSuccessful) {
-                    // Trigger the timeout only if we are not in the meeting
-                    const timeoutError = new JoinError(
-                        JoinErrorCode.TimeoutWaitingToStart,
-                    )
+                if (!joinSuccessful) {  // Ne déclencher le timeout que si on n'est pas dans le meeting
+                    const timeoutError = new JoinError(JoinErrorCode.TimeoutWaitingToStart)
                     console.error('Waiting room timeout reached', timeoutError)
                     reject(timeoutError)
                 }
@@ -157,15 +146,13 @@ export class WaitingRoomState extends BaseState {
             this.context.provider
                 .joinMeeting(
                     this.context.playwrightPage,
-                    () =>
-                        this.context.endReason ===
-                        RecordingEndReason.ApiRequest,
+                    () => this.context.endReason === RecordingEndReason.ApiRequest,
                     this.context.params,
-                    // Add a callback to notify that the join succeeded
+                    // Ajouter un callback pour notifier le succès du join
                     () => {
-                        joinSuccessful = true
-                        console.log('Join successful notification received')
-                    },
+                        joinSuccessful = true;
+                        console.log('Join successful notification received');
+                    }
                 )
                 .then(() => {
                     clearInterval(checkStopSignal)

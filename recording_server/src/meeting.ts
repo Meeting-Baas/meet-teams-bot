@@ -79,20 +79,15 @@ export class MeetingHandle {
     public async startRecordMeeting(): Promise<void> {
         try {
             await this.stateMachine.start()
-
-            // Check if an error occurred during execution
-            if (
-                this.stateMachine.getError() ||
-                this.stateMachine.getCurrentState() === MeetingStateType.Error
-            ) {
-                throw (
-                    this.stateMachine.getError() ||
-                    new Error('Recording failed to complete')
-                )
+            
+            // Vérifier si une erreur s'est produite pendant l'exécution
+            if (this.stateMachine.getError() || 
+                this.stateMachine.getCurrentState() === MeetingStateType.Error) {
+                throw this.stateMachine.getError() || new Error('Recording failed to complete');
             }
         } catch (error) {
-            console.error('Error in startRecordMeeting:', error)
-            throw error // Remonter l'erreur au niveau supérieur
+            console.error('Error in startRecordMeeting:', error);
+            throw error; // Remonter l'erreur au niveau supérieur
         }
     }
 
@@ -109,10 +104,10 @@ export class MeetingHandle {
     }
 
     public wasRecordingSuccessful(): boolean {
-        return this.stateMachine.wasRecordingSuccessful()
+        return this.stateMachine.wasRecordingSuccessful();
     }
-
+    
     public getEndReason(): RecordingEndReason | undefined {
-        return this.stateMachine.getContext().endReason
+        return this.stateMachine.getContext().endReason;
     }
 }

@@ -13,14 +13,13 @@ import { TRANSCODER } from '../../recording/Transcoder'
 import { PathManager } from '../../utils/PathManager'
 
 // Sound level threshold for considering activity (0-100)
-const SOUND_LEVEL_ACTIVITY_THRESHOLD = 5
+const SOUND_LEVEL_ACTIVITY_THRESHOLD = 5;
 
 export class RecordingState extends BaseState {
     private isProcessing: boolean = true
     private pathManager: PathManager
     private readonly CHECK_INTERVAL = 250
     private noAttendeesWithSilenceStartTime: number = 0
-    private readonly SILENCE_CONFIRMATION_MS = 45000 // 45 seconds of silence before confirming no attendees
 
     async execute(): StateExecuteResult {
         try {
@@ -96,11 +95,9 @@ export class RecordingState extends BaseState {
 
             // Check that the instance is properly created
             if (!Streaming.instance) {
-                console.warn(
-                    'Streaming service not properly initialized, trying fallback initialization',
-                )
+                console.warn('Streaming service not properly initialized, trying fallback initialization')
                 // If the instance is not available after starting, we might have a problem
-                Streaming.instance = this.context.streamingService
+                Streaming.instance = this.context.streamingService;
             }
         } else {
             console.warn('No streaming service available in context')
@@ -129,6 +126,8 @@ export class RecordingState extends BaseState {
                     endTime: chunkInfo.endTime,
                     hasAudioUrl: !!chunkInfo.audioUrl,
                 })
+
+
             } catch (error) {
                 console.error('Error during transcription:', error)
             }
@@ -153,19 +152,27 @@ export class RecordingState extends BaseState {
             try {
                 // Check if stop was requested via state machine
                 if (this.context.endReason) {
+                    console.info(`[checkEndConditions] End reason already set: ${this.context.endReason}`)
                     return { shouldEnd: true, reason: this.context.endReason }
                 }
 
                 // Check if bot was removed
                 if (await this.checkBotRemoved()) {
+                    console.info('[checkEndConditions] Bot removal detected')
                     return {
                         shouldEnd: true,
                         reason: RecordingEndReason.BotRemoved,
                     }
                 }
 
+                // Check for blocking modals (and try to dismiss them)
+                // Note: This is handled by the Global Dialog Observer in machine.ts (every 2 seconds)
+                // await this.checkForBlockingModals()
+
                 // Check participants
-                if (await this.checkNoAttendees(now)) {
+                const attendeesResult = await this.checkNoAttendees(now)
+                if (attendeesResult) {
+                    console.info('[checkEndConditions] No attendees condition met')
                     return {
                         shouldEnd: true,
                         reason: RecordingEndReason.NoAttendees,
@@ -173,11 +180,24 @@ export class RecordingState extends BaseState {
                 }
 
                 // Check audio activity
-                if (await this.checkNoSpeaker(now)) {
+                const noSpeakerResult = await this.checkNoSpeaker(now)
+                if (noSpeakerResult) {
+                    console.info('[checkEndConditions] No speaker condition met')
                     return {
                         shouldEnd: true,
                         reason: RecordingEndReason.NoSpeaker,
                     }
+                }
+
+                // Log current status periodically (every 2 minutes instead of 30 seconds)
+                const timeSinceStart = now - (this.context.startTime || 0)
+                if (timeSinceStart % 120000 < this.CHECK_INTERVAL) {
+                    const attendeesCount = this.context.attendeesCount || 0
+                    const currentSoundLevel = Streaming.instance ? Streaming.instance.getCurrentSoundLevel() : 0
+                    const noSpeakerTime = this.context.noSpeakerDetectedTime || 0
+                    const silenceDuration = noSpeakerTime > 0 ? Math.floor((now - noSpeakerTime) / 1000) : 0
+                    
+                    console.info(`[checkEndConditions] Status check - Attendees: ${attendeesCount}, Sound Level: ${currentSoundLevel.toFixed(2)}, Silence Duration: ${silenceDuration}s, Recording Time: ${Math.floor(timeSinceStart / 1000)}s`)
                 }
 
                 return { shouldEnd: false }
@@ -210,6 +230,16 @@ export class RecordingState extends BaseState {
 
     private async handleMeetingEnd(reason: RecordingEndReason): Promise<void> {
         console.info(`Handling meeting end with reason: ${reason}`)
+        
+        // Log final state before ending
+        const attendeesCount = this.context.attendeesCount || 0
+        const currentSoundLevel = Streaming.instance ? Streaming.instance.getCurrentSoundLevel() : 0
+        const noSpeakerTime = this.context.noSpeakerDetectedTime || 0
+        const silenceDuration = noSpeakerTime > 0 ? Math.floor((Date.now() - noSpeakerTime) / 1000) : 0
+        const recordingDuration = this.context.startTime ? Math.floor((Date.now() - this.context.startTime) / 1000) : 0
+        
+        console.info(`[handleMeetingEnd] Final state - Reason: ${reason}, Attendees: ${attendeesCount}, Sound Level: ${currentSoundLevel.toFixed(2)}, Silence Duration: ${silenceDuration}s, Total Recording: ${recordingDuration}s`)
+        
         this.context.endReason = reason
 
         try {
@@ -220,19 +250,12 @@ export class RecordingState extends BaseState {
             try {
                 // If the reason is bot_removed, we know the meeting is already effectively closed
                 if (reason === RecordingEndReason.BotRemoved) {
-                    console.info(
-                        'Bot was removed from meeting, skipping active closure step',
-                    )
+                    console.info('Bot was removed from meeting, skipping active closure step')
                 } else {
-                    await this.context.provider.closeMeeting(
-                        this.context.playwrightPage,
-                    )
+                    await this.context.provider.closeMeeting(this.context.playwrightPage)
                 }
             } catch (closeError) {
-                console.error(
-                    'Error closing meeting, but continuing process:',
-                    closeError,
-                )
+                console.error('Error closing meeting, but continuing process:', closeError)
             }
 
             // These critical steps must execute regardless of previous steps
@@ -240,29 +263,20 @@ export class RecordingState extends BaseState {
             await Events.callEnded()
 
             console.info('Stopping video recording')
-            await this.stopVideoRecording().catch((err) => {
-                console.error(
-                    'Error stopping video recording, continuing:',
-                    err,
-                )
+            await this.stopVideoRecording().catch(err => {
+                console.error('Error stopping video recording, continuing:', err)
             })
 
             console.info('Stopping audio streaming')
-            await this.stopAudioStreaming().catch((err) => {
-                console.error(
-                    'Error stopping audio streaming, continuing:',
-                    err,
-                )
+            await this.stopAudioStreaming().catch(err => {
+                console.error('Error stopping audio streaming, continuing:', err)
             })
 
             console.info('Stopping transcoder')
             try {
                 await TRANSCODER.stop()
             } catch (error) {
-                console.error(
-                    'Error stopping transcoder, continuing cleanup:',
-                    error,
-                )
+                console.error('Error stopping transcoder, continuing cleanup:', error)
             }
 
             console.info('Setting isProcessing to false to end recording loop')
@@ -286,77 +300,55 @@ export class RecordingState extends BaseState {
 
         try {
             // Check if the function exists first
-            const functionExists = await this.context.backgroundPage.evaluate(
-                () => {
-                    const w = window as any
-                    return {
-                        stopMediaRecorderExists:
-                            typeof w.stopMediaRecorder === 'function',
-                        recordExists: typeof w.record !== 'undefined',
-                        recordStopExists:
-                            w.record && typeof w.record.stop === 'function',
-                    }
-                },
-            )
+            const functionExists = await this.context.backgroundPage.evaluate(() => {
+                const w = window as any;
+                return {
+                    stopMediaRecorderExists: typeof w.stopMediaRecorder === 'function',
+                    recordExists: typeof w.record !== 'undefined',
+                    recordStopExists: w.record && typeof w.record.stop === 'function'
+                };
+            });
 
-            console.log('Stop functions status:', functionExists)
+            console.log('Stop functions status:', functionExists);
 
             if (functionExists.stopMediaRecorderExists) {
                 // 1. Stop media recording with detailed diagnostics
                 await this.context.backgroundPage.evaluate(() => {
-                    const w = window as any
+                    const w = window as any;
                     try {
-                        console.log('Calling stopMediaRecorder...')
-                        const result = w.stopMediaRecorder()
-                        console.log(
-                            'stopMediaRecorder called successfully, result:',
-                            result,
-                        )
-                        return result
+                        console.log('Calling stopMediaRecorder...');
+                        const result = w.stopMediaRecorder();
+                        console.log('stopMediaRecorder called successfully, result:', result);
+                        return result;
                     } catch (error) {
-                        console.error('Error in stopMediaRecorder:', error)
+                        console.error('Error in stopMediaRecorder:', error);
                         // Try to display more details about the error
-                        console.error(
-                            'Error details:',
-                            JSON.stringify(
-                                error,
-                                Object.getOwnPropertyNames(error),
-                            ),
-                        )
-                        throw error
+                        console.error('Error details:',
+                            JSON.stringify(error, Object.getOwnPropertyNames(error)));
+                        throw error;
                     }
-                })
+                });
             } else {
-                console.warn(
-                    'stopMediaRecorder function not found in window object',
-                )
+                console.warn('stopMediaRecorder function not found in window object');
 
                 // Direct workaround attempt with MediaRecorder if available
                 try {
                     await this.context.backgroundPage.evaluate(() => {
-                        const w = window as any
-                        if (
-                            w.MEDIA_RECORDER &&
-                            w.MEDIA_RECORDER.state !== 'inactive'
-                        ) {
-                            console.log(
-                                'Attempting direct stop of MEDIA_RECORDER',
-                            )
-                            w.MEDIA_RECORDER.stop()
-                            return true
+                        const w = window as any;
+                        if (w.MEDIA_RECORDER && w.MEDIA_RECORDER.state !== 'inactive') {
+                            console.log('Attempting direct stop of MEDIA_RECORDER');
+                            w.MEDIA_RECORDER.stop();
+                            return true;
                         }
-                        return false
-                    })
+                        return false;
+                    });
                 } catch (directStopError) {
-                    console.error(
-                        'Failed direct stop attempt:',
-                        directStopError,
-                    )
+                    console.error('Failed direct stop attempt:', directStopError);
                 }
             }
         } catch (error) {
-            console.error('Failed to stop video recording:', error)
-            throw error
+            console.error('Failed to stop video recording:', error);
+            throw error;
         }
     }
 
@@ -405,8 +397,29 @@ export class RecordingState extends BaseState {
         const startTime = this.context.startTime || 0
         const firstUserJoined = this.context.firstUserJoined || false
 
+        // Get sound level ONCE at the beginning to avoid race conditions
+        let currentSoundLevel = 0
+        let hasAudioActivity = false
+        
+        if (Streaming.instance) {
+            currentSoundLevel = Streaming.instance.getCurrentSoundLevel()
+            hasAudioActivity = currentSoundLevel > SOUND_LEVEL_ACTIVITY_THRESHOLD
+        }
+
+        // CRITICAL OVERRIDE: If we have sound activity, someone is clearly there regardless of attendee detection
+        if (hasAudioActivity) {
+            if (this.noAttendeesWithSilenceStartTime > 0) {
+                console.info(`[checkNoAttendees] SOUND ACTIVITY OVERRIDE - Level: ${currentSoundLevel.toFixed(2)} > ${SOUND_LEVEL_ACTIVITY_THRESHOLD}, resetting silence timer despite attendeesCount=${attendeesCount}`)
+            }
+            this.noAttendeesWithSilenceStartTime = 0
+            return false // Never end if we have sound activity
+        }
+
         // If participants are present, no need to end and reset silence timer
         if (attendeesCount > 0) {
+            if (this.noAttendeesWithSilenceStartTime > 0) {
+                console.info(`[checkNoAttendees] Attendees present (${attendeesCount}), resetting silence timer`)
+            }
             this.noAttendeesWithSilenceStartTime = 0
             return false
         }
@@ -426,28 +439,30 @@ export class RecordingState extends BaseState {
             // If this is the first time we're detecting no attendees, start the silence timer
             if (this.noAttendeesWithSilenceStartTime === 0) {
                 this.noAttendeesWithSilenceStartTime = now
+                console.info(`[checkNoAttendees] Starting silence confirmation timer - Reason: ${noAttendeesTimeout ? 'initial_wait_timeout' : 'user_left'}, SoundLevel: ${currentSoundLevel.toFixed(2)}`)
                 return false
             }
 
             // Check if we've had silence for long enough
             const silenceDuration = now - this.noAttendeesWithSilenceStartTime
-            const hasEnoughSilence =
-                silenceDuration >= this.SILENCE_CONFIRMATION_MS
+            const hasEnoughSilence = silenceDuration >= MEETING_CONSTANTS.SILENCE_TIMEOUT
 
-            // If we're tracking silence but haven't reached the threshold, log the progress
-            if (
-                !hasEnoughSilence &&
-                silenceDuration % 5000 < this.CHECK_INTERVAL
-            ) {
-                console.log(
-                    `[checkNoAttendees] Waiting for silence confirmation: ${Math.floor(silenceDuration / 1000)}s / ${this.SILENCE_CONFIRMATION_MS / 1000}s`,
-                )
+            // If we're tracking silence but haven't reached the threshold, log the progress (every 30 seconds instead of 5)
+            if (!hasEnoughSilence && silenceDuration % 30000 < this.CHECK_INTERVAL) {
+                console.info(`[checkNoAttendees] Waiting for silence confirmation: ${Math.floor(silenceDuration/1000)}s / ${MEETING_CONSTANTS.SILENCE_TIMEOUT/1000}s, SoundLevel: ${currentSoundLevel.toFixed(2)}`)
+            }
+
+            if (hasEnoughSilence) {
+                console.info(`[checkNoAttendees] Silence confirmation complete - Duration: ${Math.floor(silenceDuration/1000)}s, Threshold: ${MEETING_CONSTANTS.SILENCE_TIMEOUT/1000}s, Attendees: ${attendeesCount}, FinalSoundLevel: ${currentSoundLevel.toFixed(2)}`)
             }
 
             return hasEnoughSilence
         }
 
         // Reset silence timer if we're not considering ending
+        if (this.noAttendeesWithSilenceStartTime > 0) {
+            console.info(`[checkNoAttendees] Conditions no longer met for ending, resetting silence timer`)
+        }
         this.noAttendeesWithSilenceStartTime = 0
         return false
     }
@@ -466,35 +481,36 @@ export class RecordingState extends BaseState {
         }
 
         // Check current sound level if streaming is available
+        let soundLevelStatus = 'unknown'
+        let currentSoundLevel = 0
+        
         if (Streaming.instance) {
-            const currentSoundLevel = Streaming.instance.getCurrentSoundLevel()
-
-            // More detailed sound level logging
-            // console.log(`[checkNoSpeaker] Current sound level: ${currentSoundLevel.toFixed(2)}, threshold: ${SOUND_LEVEL_ACTIVITY_THRESHOLD}`);
+            currentSoundLevel = Streaming.instance.getCurrentSoundLevel()
+            soundLevelStatus = currentSoundLevel > SOUND_LEVEL_ACTIVITY_THRESHOLD ? 'active' : 'silent'
 
             // If sound is detected above threshold, reset the silence counter
             if (currentSoundLevel > SOUND_LEVEL_ACTIVITY_THRESHOLD) {
-                console.log(
-                    `[checkNoSpeaker] Sound activity detected (${currentSoundLevel.toFixed(2)}), resetting silence timer`,
-                )
+                const silenceDuration = now - noSpeakerDetectedTime
+                console.info(`[checkNoSpeaker] Sound activity detected - Level: ${currentSoundLevel.toFixed(2)} > ${SOUND_LEVEL_ACTIVITY_THRESHOLD}, resetting silence timer (was silent for ${Math.floor(silenceDuration/1000)}s)`)
                 this.context.noSpeakerDetectedTime = 0
                 return false
             }
         } else {
-            console.warn(
-                '[checkNoSpeaker] Streaming instance not available, cannot check sound levels',
-            )
+            console.warn('[checkNoSpeaker] Streaming instance not available, cannot check sound levels - proceeding with timeout check only')
         }
 
         // Check if the silence period has exceeded the timeout
-        const silenceDuration = Math.floor((now - noSpeakerDetectedTime) / 1000)
-        const shouldEnd =
-            noSpeakerDetectedTime + MEETING_CONSTANTS.SILENCE_TIMEOUT < now
+        const silenceDuration = Math.floor((now - noSpeakerDetectedTime)/1000)
+        const timeoutThreshold = Math.floor(MEETING_CONSTANTS.SILENCE_TIMEOUT / 1000)
+        const shouldEnd = noSpeakerDetectedTime + MEETING_CONSTANTS.SILENCE_TIMEOUT < now
 
         if (shouldEnd) {
-            console.log(
-                `[checkNoSpeaker] No sound activity detected for ${silenceDuration} seconds, ending meeting`,
-            )
+            console.info(`[checkNoSpeaker] Silence timeout reached - Duration: ${silenceDuration}s >= ${timeoutThreshold}s, Final Sound Level: ${currentSoundLevel.toFixed(2)}, Status: ${soundLevelStatus}, ending meeting`)
+        } else {
+            // Log progress towards timeout every 60 seconds instead of 30
+            if (silenceDuration % 60 === 0 && silenceDuration > 0) {
+                console.info(`[checkNoSpeaker] Silence progress - ${silenceDuration}s / ${timeoutThreshold}s until timeout, Current Sound Level: ${currentSoundLevel.toFixed(2)}`)
+            }
         }
 
         return shouldEnd

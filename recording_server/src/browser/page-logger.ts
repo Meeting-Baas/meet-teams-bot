@@ -1,13 +1,13 @@
 import { Page } from '@playwright/test'
 
-// List of URLs to ignore for errors
+// Liste des URL à ignorer pour les erreurs
 const IGNORED_URLS = [
     'api.flightproxy.teams.microsoft.com',
     'broker.skype.com',
     'meet.google.com/$rpc/google.rtc.meetings.v1.MeetingDeviceService/UpdateMeetingDevice',
 ]
 
-// List of errors to ignore
+// Liste des erreurs à ignorer
 const IGNORED_ERRORS = [
     'net::ERR_ABORTED',
     'Unhandled error/rejection {"isTrusted":true}',
@@ -45,12 +45,12 @@ export function listenPage(page: Page) {
             const text = message.text()
             const location = message.location()
 
-            // Ignore messages if URL is in IGNORED_URLS list
+            // Ignorer les messages si l'URL est dans la liste IGNORED_URLS
             if (shouldIgnoreError(location.url)) {
                 return
             }
 
-            // Ignore certain known error messages
+            // Ignorer certains messages d'erreur connus
             if (IGNORED_ERRORS.some((err) => text.includes(err))) {
                 return
             }

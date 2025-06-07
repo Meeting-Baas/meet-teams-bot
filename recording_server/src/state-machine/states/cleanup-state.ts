@@ -11,7 +11,7 @@ export class CleanupState extends BaseState {
         try {
             console.info('Starting cleanup sequence')
 
-            // Use Promise.race to implement the timeout
+            // Utiliser Promise.race pour implémenter le timeout
             const cleanupPromise = this.performCleanup()
             const timeoutPromise = new Promise((_, reject) => {
                 setTimeout(
@@ -28,7 +28,7 @@ export class CleanupState extends BaseState {
             return this.transition(MeetingStateType.Terminated) // État final
         } catch (error) {
             console.error('Error during cleanup:', error)
-            // Even in case of error, we stay in Cleanup state
+            // Même en cas d'erreur, on reste dans l'état Cleanup
             return this.transition(MeetingStateType.Cleanup)
         }
     }
@@ -43,23 +43,26 @@ export class CleanupState extends BaseState {
                 this.context.streamingService.stop()
             }
 
-            // 3. Clean up extension resources and browser
+            // 3. Nettoyage des ressources de l'extension et du navigateur
             await this.cleanupBrowserResources()
 
-            // 4. Upload the video to S3 before removing local files
+            // 4. Upload de la vidéo à S3 avant de nettoyer les fichiers locaux
             await this.uploadVideoToS3()
 
-            // 5. Final Redis cleanup
+            // 5. Nettoyage final Redis
             await this.cleanupRedisSession()
         } catch (error) {
             console.error('Cleanup error:', error)
-            // Continue even if an error occurs
+            // On continue même en cas d'erreur
         }
     }
 
     private async stopTranscoderAndTranscription(): Promise<void> {
         try {
-            await Promise.all([TRANSCODER.stop()])
+            await Promise.all([
+                TRANSCODER.stop(),
+                
+            ])
         } catch (error) {
             console.error('Error stopping processes:', error)
             throw error
@@ -67,23 +70,23 @@ export class CleanupState extends BaseState {
     }
     private async cleanupBrowserResources(): Promise<void> {
         try {
-            // 1. Stop branding
+            // 1. Arrêter le branding
             if (this.context.brandingProcess) {
                 this.context.brandingProcess.kill()
             }
 
-            // 2. Stop media contexts
+            // 2. Arrêter les contextes média
             VideoContext.instance?.stop()
             SoundContext.instance?.stop()
 
-            // 3. Close pages and clean the browser
+            // 3. Fermer les pages et nettoyage du navigateur
             await Promise.all([
                 this.context.playwrightPage?.close().catch(() => {}),
                 this.context.backgroundPage?.close().catch(() => {}),
                 this.context.browserContext?.close().catch(() => {}),
             ])
 
-            // 4. Clear timeouts
+            // 4. Nettoyage des timeouts
             if (this.context.meetingTimeoutInterval) {
                 clearTimeout(this.context.meetingTimeoutInterval)
             }
@@ -101,9 +104,7 @@ export class CleanupState extends BaseState {
                 console.log('Uploading video to S3')
                 await TRANSCODER.uploadToS3()
             } else {
-                console.log(
-                    'Files already uploaded to S3 in stop() method, skipping',
-                )
+                console.log('Files already uploaded to S3 in stop() method, skipping')
             }
         } catch (error) {
             console.error('Failed to upload video to S3:', error)
