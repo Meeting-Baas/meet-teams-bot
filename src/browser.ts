@@ -3,7 +3,8 @@ import { join } from 'path'
 
 // const EXTENSION_NAME = 'spoke'
 const EXTENSION_ID = 'eahilodcoaonodbfiijhpmfnddkfhmbl'
-const USER_DATA_DIR = '/tmp/test-user-data-dir'
+// Dynamic user data directory based on bot instance
+const USER_DATA_DIR = process.env.BOT_BROWSER_PROFILE || '/tmp/test-user-data-dir'
 
 type Resolution = {
     width: number
@@ -57,6 +58,15 @@ export async function openBrowser(
     const width = RESOLUTION.width
     const height = RESOLUTION.height
 
+    // Get unique browser profile and audio device from environment
+    const botInstanceId = process.env.BOT_INSTANCE_ID || 'default'
+    const audioDevice = process.env.BOT_AUDIO_DEVICE || 'default'
+    const userDataDir = process.env.BOT_BROWSER_PROFILE || USER_DATA_DIR
+    
+    console.log(`🤖 Browser config for bot instance: ${botInstanceId}`)
+    console.log(`🔊 Using audio device: ${audioDevice}`)
+    console.log(`🌐 Using profile directory: ${userDataDir}`)
+
     try {
         console.log('Launching persistent context...')
 
@@ -67,7 +77,12 @@ export async function openBrowser(
             throw new Error('Extension path not found')
         }
 
-        const context = await chromium.launchPersistentContext('', {
+        // Create unique user data directory
+        if (!fs.existsSync(userDataDir)) {
+            fs.mkdirSync(userDataDir, { recursive: true })
+        }
+
+        const context = await chromium.launchPersistentContext(userDataDir, {
             headless: false,
             viewport: { width, height },
             args: [
@@ -80,6 +95,13 @@ export async function openBrowser(
                 `--load-extension=${pathToExtension}`,
                 `--allowlisted-extension-id=${EXTENSION_ID}`,
                 
+                // Audio device isolation (if not default)
+                ...(audioDevice !== 'default' ? [
+                    `--force-device-scale-factor=1`,
+                    `--audio-buffer-size=2048`,
+                    `--disable-features=AudioServiceOutOfProcess`,
+                ] : []),
+                
                 // WebRTC optimizations (required for meeting audio/video capture)
                 '--disable-rtc-smoothness-algorithm',
                 '--disable-webrtc-hw-decoding',
@@ -90,11 +112,11 @@ export async function openBrowser(
                 '--disable-blink-features=AutomationControlled',
                 '--disable-background-timer-throttling',
                 '--enable-features=SharedArrayBuffer',
-                '--memory-pressure-off',              // Disable memory pressure handling for consistent performance
+                '--memory-pressure-off',
                 '--max_old_space_size=4096',          // Increase V8 heap size to 4GB for large meetings
                 '--disable-background-networking',    // Reduce background network activity
                 '--disable-features=TranslateUI',     // Disable translation features to save resources
-                '--disable-features=AutofillServerCommunication', // Disable autofill to reduce network usage
+                '--disable-features=AutofillServerCommunication',
                 '--disable-component-extensions-with-background-pages', // Reduce background extension overhead
                 '--disable-default-apps',             // Disable default Chrome apps
                 '--renderer-process-limit=4',         // Limit renderer processes to prevent resource exhaustion
@@ -161,7 +183,12 @@ export async function openBrowser(
         console.log('Background page found')
         return { browser: context, backgroundPage }
     } catch (error) {
-        console.error('Failed to open browser:', error)
+        console.error('Failed to open browser:', {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            error: error
+        })
         throw error
     }
 }
