@@ -11,7 +11,7 @@ import { PathManager } from './utils/PathManager'
 export class SpeakerManager {
     private static instance: SpeakerManager | null = null
     private currentSpeaker: SpeakerData | null = null
-    private readonly PAUSE_BETWEEN_SENTENCES = 1000 // 1 second
+    private readonly PAUSE_BETWEEN_SENTENCES = 1000 // 1 seconde
     private lastSpeakerTime: number | null = null
 
     private constructor() {}
@@ -125,7 +125,7 @@ export class SpeakerManager {
             // Changement de speaker
             await uploadTranscriptTask(activeSpeaker, false)
         } else if (this.currentSpeaker.isSpeaking === false) {
-            // The speaker has started speaking again after a pause
+            // Le speaker a recommencé à parler après une pause
             if (
                 activeSpeaker.timestamp >=
                 this.currentSpeaker.timestamp + this.PAUSE_BETWEEN_SENTENCES

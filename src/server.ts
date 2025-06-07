@@ -110,13 +110,12 @@ export async function server() {
     app.post('/stop_record', async (req, res) => {
         const data: StopRecordParams = req.body
         console.log('end meeting from api server :', data)
-
+        
         // Mettre à jour immédiatement le contexte de la machine à états
         if (MeetingHandle.instance) {
-            MeetingHandle.instance.stateMachine.context.endReason =
-                RecordingEndReason.ApiRequest
+            MeetingHandle.instance.stateMachine.context.endReason = RecordingEndReason.ApiRequest
         }
-
+        
         stop_record(res, RecordingEndReason.ApiRequest)
     })
 
@@ -125,7 +124,7 @@ export async function server() {
         // console.log('logs from zoom', req.body)
         const { level, message, timestamp } = req.body
 
-        // Function to colorize logs in terminal
+        // Fonction pour colorer les logs dans le terminal
         function colorLog(level, message, timestamp) {
             switch (level) {
                 case 'warn':
@@ -248,7 +247,7 @@ export async function server() {
                         return
                     }
                     try {
-                        const command = `ffmpeg -y -loop 1 -i resized_${filename} -c:v libx264 -preset ultrafast -tune stillimage -r 30 -t 1 -pix_fmt yuv420p ${filename}.mp4`
+                        const command = `ffmpeg -y -loop 1 -i resized_${filename} -c:v libx264 -r 30 -t 1 -pix_fmt yuv420p ${filename}.mp4`
                         const output = execSync(command)
                         console.log(output.toString())
                     } catch (e) {
@@ -327,7 +326,7 @@ export async function server() {
         process.exit(0)
     })
 
-    // In server.ts, we receive chunks but there is no logging
+    // Dans server.ts, on reçoit les chunks mais il n'y a pas de logging
     app.post('/transcoder/upload_chunk', async (req, res) => {
         return await uploadChunk(req, res, false)
     })

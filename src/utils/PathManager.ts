@@ -8,11 +8,9 @@ export class PathManager {
     private environment: string
     private botUuid: string | null
     private secret: string | null
-    private isServerless: boolean
 
     private constructor() {
         this.environment = process.env.ENVIRON || 'dev'
-        this.isServerless = process.env.SERVERLESS === 'true' || false
         this.botUuid = null
         this.secret = null
         console.log('ENVIRON:', this.environment)
@@ -74,9 +72,6 @@ export class PathManager {
     }
 
     public getBasePath(): string {
-        if (this.isServerless) {
-            return path.join('./data', this.botUuid)
-        }
         const identifier = this.botUuid
         switch (this.environment) {
             case 'prod':
@@ -113,7 +108,7 @@ export class PathManager {
     }
 
     public getSpeakerLogPath(): string {
-        return path.join(this.getBasePath(), 'SeparationSpeaker.log')
+        return path.join(this.getBasePath(), 'SeparationSpeakerLog.txt')
     }
 
     public getSoundLogPath(): string {
@@ -122,6 +117,10 @@ export class PathManager {
 
     public getTempPath(): string {
         return path.join(this.getBasePath(), 'temp')
+    }
+
+    public getMachineLogPath(): string {
+        return path.join(this.getBasePath(), 'machine.log')
     }
 
     public async ensureDirectories(): Promise<void> {
@@ -140,20 +139,20 @@ export class PathManager {
 
     public async moveFile(sourcePath: string, destPath: string): Promise<void> {
         try {
-            // Ensure the source file exists
+            // Vérifier que le fichier source existe
             await fs.access(sourcePath)
 
-            // Create the destination folder if needed
+            // Créer le dossier de destination si nécessaire
             await fs.mkdir(path.dirname(destPath), { recursive: true })
 
-            // Remove destination file if it already exists
+            // Si le fichier de destination existe déjà, le supprimer
             try {
                 await fs.unlink(destPath)
             } catch (e) {
-                // Ignore if the file does not exist
+                // Ignore si le fichier n'existe pas
             }
 
-            // Move the file
+            // Déplacer le fichier
             await fs.rename(sourcePath, destPath)
 
             console.log(

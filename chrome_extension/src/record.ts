@@ -47,7 +47,7 @@ export async function initMediaRecorder(
 
                 try {
                     MEDIA_RECORDER = new MediaRecorder(stream, {
-                        mimeType: 'video/webm; codecs=vp9,opus',
+                        mimeType: 'video/webm; codecs=h264,pcm',
                     })
                 } catch (e) {
                     console.error('error creating media recorder', e)
@@ -169,7 +169,7 @@ async function handleChunk(isFinal: boolean) {
 
     const recordedDataChunk = recordedChunks.map((c) => c.data)
     const blob = new Blob(recordedDataChunk, {
-        type: 'video/webm; codecs=opus',
+        type: 'video/webm; codecs=pcm',
     })
     const file = new File([blob], 'record.webm', {
         type: 'video/webm',

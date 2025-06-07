@@ -5,15 +5,15 @@ import { MeetingStateType, StateExecuteResult } from '../types'
 import { BaseState } from './base-state'
 
 export class ResumingState extends BaseState {
-    async execute(): StateExecuteResult {
+        async execute(): StateExecuteResult {
         try {
-            // Reprendre l'enregistrement
+                       // Reprendre l'enregistrement
             await this.resumeRecording()
 
             // Notifier de la reprise
             Events.recordingResumed()
 
-            // Reset pause variables
+            // Réinitialiser les variables de pause
             this.context.pauseStartTime = null
             this.context.isPaused = false
 
@@ -41,7 +41,7 @@ export class ResumingState extends BaseState {
 
     private async resumeRecording(): Promise<void> {
         const resumePromise = async () => {
-            // Resume the MediaRecorder in the browser
+            // Reprendre le MediaRecorder dans le navigateur
             await this.context.backgroundPage?.evaluate(() => {
                 const w = window as any
                 return w.resumeMediaRecorder?.()

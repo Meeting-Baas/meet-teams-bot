@@ -8,16 +8,16 @@ import { BaseState } from './base-state'
 export class InCallState extends BaseState {
     async execute(): StateExecuteResult {
         try {
-            // Start dialog observer upon entering the state
+            // Démarrer l'observateur de dialogue dès l'entrée dans l'état
             this.startDialogObserver()
-
-            // Start with global timeout for setup
+            
+            // Démarrer avec un timeout global pour le setup
             await Promise.race([this.setupRecording(), this.createTimeout()])
             return this.transition(MeetingStateType.Recording)
         } catch (error) {
             // Arrêter l'observateur en cas d'erreur
             this.stopDialogObserver()
-
+            
             console.error('Setup recording failed:', error)
             return this.handleError(error as Error)
         }
@@ -42,10 +42,10 @@ export class InCallState extends BaseState {
             // Notifier qu'on est en appel mais pas encore en enregistrement
             Events.inCallNotRecording()
 
-            // Initialize services
+            // Initialiser les services
             await this.initializeServices()
 
-            // Clean HTML and start observation
+            // Nettoyer le HTML et démarrer l'observation
             await this.setupBrowserComponents()
 
             console.info('Recording setup completed successfully')
@@ -61,6 +61,10 @@ export class InCallState extends BaseState {
         if (!this.context.pathManager) {
             throw new Error('PathManager not initialized')
         }
+
+       
+
+
 
         // Configurer le transcoder avec le mode d'enregistrement
         TRANSCODER.configure(
@@ -81,159 +85,140 @@ export class InCallState extends BaseState {
 
         try {
             // First check if the extension functions exist
-            const functionsExist = await this.context.backgroundPage.evaluate(
-                () => {
-                    const w = window as any
-                    return {
-                        removeHtmlExists:
-                            typeof w.remove_shitty_html === 'function',
-                        speakersObserverExists:
-                            typeof w.start_speakers_observer === 'function',
-                    }
-                },
-            )
-
-            console.log('Extension functions status:', functionsExist)
-
+            const functionsExist = await this.context.backgroundPage.evaluate(() => {
+                const w = window as any;
+                return {
+                    removeHtmlExists: typeof w.remove_shitty_html === 'function',
+                    speakersObserverExists: typeof w.start_speakers_observer === 'function'
+                };
+            });
+            
+            console.log('Extension functions status:', functionsExist);
+            
             // Only attempt to call functions that exist
             if (functionsExist.removeHtmlExists) {
                 // Nettoyage du HTML
                 await this.context.backgroundPage.evaluate(
                     async (params) => {
-                        const w = window as any
+                        const w = window as any;
                         await w.remove_shitty_html(
                             params.recording_mode,
                             params.meetingProvider,
-                        )
+                        );
                     },
                     {
                         recording_mode: this.context.params.recording_mode,
                         meetingProvider: this.context.params.meetingProvider,
-                    },
-                )
-                console.log('HTML cleanup completed successfully')
+                    }
+                );
+                console.log('HTML cleanup completed successfully');
             } else {
-                console.warn(
-                    'remove_shitty_html function not found in extension context',
-                )
+                console.warn('remove_shitty_html function not found in extension context');
             }
 
-            SpeakerManager.start()
+            SpeakerManager.start();
 
             if (functionsExist.speakersObserverExists) {
-                // Start speaker observation
+                // Démarrer l'observation des speakers
                 await this.context.backgroundPage.evaluate(
                     async (params) => {
-                        const w = window as any
+                        const w = window as any;
                         await w.start_speakers_observer(
                             params.recording_mode,
                             params.bot_name,
                             params.meetingProvider,
-                        )
+                        );
                     },
                     {
                         recording_mode: this.context.params.recording_mode,
                         bot_name: this.context.params.bot_name,
                         meetingProvider: this.context.params.meetingProvider,
-                    },
-                )
-                console.log('Speakers observer started successfully')
+                    }
+                );
+                console.log('Speakers observer started successfully');
             } else {
-                console.warn(
-                    'start_speakers_observer function not found in extension context',
-                )
+                console.warn('start_speakers_observer function not found in extension context');
                 // Continue without speakers observer - this is non-critical
             }
         } catch (error) {
-            console.error('Error in setupBrowserComponents:', error)
+            console.error('Error in setupBrowserComponents:', error);
             // Log additional context to help diagnose the issue
             console.error('Context state:', {
                 hasBackgroundPage: !!this.context.backgroundPage,
                 recordingMode: this.context.params.recording_mode,
                 meetingProvider: this.context.params.meetingProvider,
-                botName: this.context.params.bot_name,
-            })
-
+                botName: this.context.params.bot_name
+            });
+            
             // Re-throw the error, but with more context
-            throw new Error(`Browser component setup failed: ${error as Error}`)
+            throw new Error(`Browser component setup failed: ${error as Error}`);
         }
 
-        // Check if startRecording exists
-        const recordingFunctionsExist =
-            await this.context.backgroundPage.evaluate(() => {
-                const w = window as any
-                return {
-                    startRecordingExists:
-                        typeof w.startRecording === 'function',
-                    initMediaRecorderExists:
-                        typeof w.initMediaRecorder === 'function',
-                    recordModuleExists: typeof w.record !== 'undefined',
-                }
-            })
+        // Vérifier si startRecording existe
+        const recordingFunctionsExist = await this.context.backgroundPage.evaluate(() => {
+            const w = window as any;
+            return {
+                startRecordingExists: typeof w.startRecording === 'function',
+                initMediaRecorderExists: typeof w.initMediaRecorder === 'function', 
+                recordModuleExists: typeof w.record !== 'undefined'
+            };
+        });
 
-        console.log('Recording functions status:', recordingFunctionsExist)
+        console.log('Recording functions status:', recordingFunctionsExist);
 
-        // Start recording with improved error handling
-        let startTime: number
+        // Démarrer l'enregistrement avec gestion d'erreur améliorée
+        let startTime: number;
         try {
             if (recordingFunctionsExist.startRecordingExists) {
                 console.log('Calling startRecording with parameters:', {
-                    local_recording_server_location:
-                        this.context.params.local_recording_server_location,
+                    local_recording_server_location: this.context.params.local_recording_server_location,
                     chunk_duration: MEETING_CONSTANTS.CHUNK_DURATION,
                     streaming_output: this.context.params.streaming_output,
-                    streaming_audio_frequency:
-                        this.context.params.streaming_audio_frequency,
-                })
-
+                    streaming_audio_frequency: this.context.params.streaming_audio_frequency
+                });
+                
                 startTime = await this.context.backgroundPage.evaluate(
                     async (params) => {
-                        const w = window as any
+                        const w = window as any;
                         try {
                             // Loguer pour voir si la fonction est appelée
-                            console.log(
-                                'Calling window.startRecording function...',
-                            )
-
+                            console.log('Calling window.startRecording function...');
+                            
                             const result = await w.startRecording(
                                 params.local_recording_server_location,
                                 params.chunk_duration,
                                 params.streaming_output,
-                                params.streaming_audio_frequency,
-                            )
-
-                            console.log('startRecording returned:', result)
-                            return result || Date.now() // Fallback si undefined
+                                params.streaming_audio_frequency
+                            );
+                            
+                            console.log('startRecording returned:', result);
+                            return result || Date.now(); // Fallback si undefined
                         } catch (error) {
-                            console.error('Error in startRecording:', error)
-                            return Date.now() // Fallback
+                            console.error('Error in startRecording:', error);
+                            return Date.now(); // Fallback
                         }
                     },
                     {
-                        local_recording_server_location:
-                            this.context.params.local_recording_server_location,
+                        local_recording_server_location: this.context.params.local_recording_server_location,
                         chunk_duration: MEETING_CONSTANTS.CHUNK_DURATION,
                         streaming_output: this.context.params.streaming_output,
-                        streaming_audio_frequency:
-                            this.context.params.streaming_audio_frequency,
-                    },
-                )
+                        streaming_audio_frequency: this.context.params.streaming_audio_frequency
+                    }
+                );
             } else {
-                console.warn(
-                    'startRecording function not found in extension context',
-                )
-                startTime = Date.now()
+                console.warn('startRecording function not found in extension context');
+                startTime = Date.now();
             }
         } catch (error) {
-            console.error('Error starting recording:', error)
-            startTime = Date.now() // Fallback
+            console.error('Error starting recording:', error);
+            startTime = Date.now(); // Fallback
         }
 
-        // Set start time in context
-        this.context.startTime = startTime || Date.now()
-        console.log(`Recording started at timestamp: ${this.context.startTime}`)
+        // Définir le temps de début dans le contexte
+        this.context.startTime = startTime || Date.now();
+        console.log(`Recording started at timestamp: ${this.context.startTime}`);
 
         // Notifier que l'enregistrement est démarré
-        Events.inCallRecording({ start_time: this.context.startTime })
+        Events.inCallRecording({ start_time: this.context.startTime });
     }
 }

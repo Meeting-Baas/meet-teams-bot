@@ -55,7 +55,7 @@ export class InitializationState extends BaseState {
                 this.context.params.streaming_audio_frequency,
                 this.context.params.bot_uuid,
             )
-
+            
             // All initialization successful
             return this.transition(MeetingStateType.WaitingRoom)
         } catch (error) {
@@ -90,7 +90,7 @@ export class InitializationState extends BaseState {
                 // Augmenter le timeout pour les environnements plus lents
                 const timeoutMs = 60000 // 60 secondes au lieu de 30
 
-                // Create a promise that rejects after a delay
+                // Créer une promesse qui se rejette après un délai
                 const timeoutPromise = new Promise<BrowserResult>(
                     (_, reject) => {
                         const id = setTimeout(() => {
@@ -150,7 +150,7 @@ export class InitializationState extends BaseState {
             }
         } catch (error) {
             console.error('Path manager setup failed:', error)
-            // Create base directories if possible
+            // Créer les répertoires de base si possible
             try {
                 const fs = require('fs')
                 const path = require('path')

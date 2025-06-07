@@ -6,20 +6,20 @@ import { BaseState } from './base-state'
 export class ErrorState extends BaseState {
     async execute(): StateExecuteResult {
         try {
-            // Log the error
+            // Log l'erreur
             await this.logError()
 
-            // Notify error events
+            // Notification des événements d'erreur
             await this.notifyError()
 
-            // Update metrics
+            // Mise à jour des métriques
             this.updateMetrics()
 
-            // Move to cleanup
+            // Passage au nettoyage
             return this.transition(MeetingStateType.Cleanup)
         } catch (error) {
             console.error('Error in ErrorState:', error)
-            // Even if error handling fails, transition to cleanup
+            // Même en cas d'erreur dans la gestion d'erreur, on passe au nettoyage
             return this.transition(MeetingStateType.Cleanup)
         }
     }
@@ -32,7 +32,7 @@ export class ErrorState extends BaseState {
             return
         }
 
-        // Create a detailed error object
+        // Création d'un objet d'erreur détaillé
         const errorDetails = {
             message: error.message,
             stack: error.stack,
@@ -47,7 +47,7 @@ export class ErrorState extends BaseState {
             timestamp: Date.now(),
         }
 
-        // Log the error with all details
+        // Log de l'erreur avec tous les détails
         console.error('Meeting error occurred:', errorDetails)
     }
 
@@ -60,24 +60,21 @@ export class ErrorState extends BaseState {
                 return
             }
 
-            // Full log for debugging
+            // Log complet pour le débogage
             console.log('Error in notifyError:', {
                 isJoinError: error instanceof JoinError,
                 name: error.name,
                 message: error.message,
-                code:
-                    error instanceof JoinError
-                        ? error.message
-                        : 'not a JoinError',
-                stack: error.stack?.substring(0, 200), // Limite la taille du stack
+                code: error instanceof JoinError ? error.message : 'not a JoinError',
+                stack: error.stack?.substring(0, 200) // Limite la taille du stack
             })
 
             try {
                 if (error instanceof JoinError) {
-                    // Additional check on the error code
+                    // Vérification supplémentaire du code d'erreur
                     const errorCode = error.message
                     console.log('JoinError code:', errorCode)
-
+                    
                     switch (errorCode) {
                         case JoinErrorCode.BotNotAccepted:
                             await Events.botRejected()
@@ -96,9 +93,7 @@ export class ErrorState extends BaseState {
                             await Events.apiRequestStop()
                             break
                         default:
-                            console.log(
-                                `Unhandled JoinError code: ${errorCode}`,
-                            )
+                            console.log(`Unhandled JoinError code: ${errorCode}`)
                             await Events.meetingError(error)
                     }
                 } else {
@@ -109,13 +104,9 @@ export class ErrorState extends BaseState {
             }
         }
 
-        // Increase timeout for error notification
-        const timeoutPromise = new Promise<void>(
-            (_, reject) =>
-                setTimeout(
-                    () => reject(new Error('Notify error timeout')),
-                    15000,
-                ), // 15 seconds instead of 5
+        // Augmenter le timeout pour la notification d'erreur
+        const timeoutPromise = new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error('Notify error timeout')), 15000), // 15 secondes au lieu de 5
         )
 
         try {
@@ -138,13 +129,13 @@ export class ErrorState extends BaseState {
                 ? Date.now() - this.context.startTime
                 : 0,
             state: this.stateType,
-            // Other relevant context metrics
+            // Autres métriques pertinentes du contexte
             attendeesCount: this.context.attendeesCount,
             firstUserJoined: this.context.firstUserJoined,
             sessionId: this.context.params?.session_id,
         }
 
-        // Log metrics
+        // Log des métriques
         console.info('Error metrics:', metrics)
     }
 }

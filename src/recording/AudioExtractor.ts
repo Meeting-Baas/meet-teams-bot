@@ -6,12 +6,12 @@ import { PathManager } from '../utils/PathManager'
 import { S3Uploader } from '../utils/S3Uploader'
 
 export interface AudioExtractionOptions {
-    sampleRate?: number // Default 16000
-    channels?: number // Default 1 (mono)
-    format?: string // Default 'wav'
-    maxRetries?: number // Default 3
-    retryDelay?: number // Default 2000ms
-    segmentDuration?: number // Default 3 minutes
+    sampleRate?: number // Par défaut 16000
+    channels?: number // Par défaut 1 (mono)
+    format?: string // Par défaut 'wav'
+    maxRetries?: number // Par défaut 3
+    retryDelay?: number // Par défaut 2000ms
+    segmentDuration?: number // Par défaut 3 minutes
 }
 
 export class AudioExtractor extends EventEmitter {
@@ -54,7 +54,7 @@ export class AudioExtractor extends EventEmitter {
         const webmPath = this.pathManager.getWebmPath()
 
         try {
-            // Check if the webm file exists
+            // Vérifier si le fichier webm existe
             const webmExists = await this.checkWebmFile(webmPath)
             console.log('Paths for extraction:', {
                 webmPath,
@@ -76,19 +76,16 @@ export class AudioExtractor extends EventEmitter {
                 outputPath,
             )
 
-            // Validate the file
+            // Vérifier le fichier
             await this.validateAudioFile(outputPath)
 
-            // Upload to S3 using the correct path
-            const s3Url =
-                process.env.SERVERLESS !== 'true'
-                    ? await this.s3Uploader.uploadFile(
-                          outputPath,
-                          bucketName,
-                          `${s3Path}/${path.basename(outputPath)}`,
-                          true,
-                      )
-                    : null
+            // Upload vers S3 avec le bon chemin
+            const s3Url = await this.s3Uploader.uploadFile(
+                outputPath,
+                bucketName,
+                `${s3Path}/${path.basename(outputPath)}`,
+                true,
+            )
 
             this.emit('extractionComplete', {
                 startTime,

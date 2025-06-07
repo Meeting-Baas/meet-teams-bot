@@ -17,6 +17,7 @@ export class Api {
             )
             return Api.instance
         }
+        axios.defaults.headers.common['Authorization'] = params.user_token
         axios.defaults.baseURL = process.env.API_SERVER_BASEURL
         axios.defaults.withCredentials = true
 
