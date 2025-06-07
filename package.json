@@ -15,7 +15,6 @@
         "express": "4.17.1",
         "fs": "^0.0.1-security",
         "jsdom": "24.0.0",
-        "node": "16.14.0",
         "node-fetch": "^2.7.0",
         "path": "^0.12.7",
         "ramda": "0.29.1",
@@ -71,6 +70,6 @@
     },
     "homepage": "https://github.com/yourusername/meet-teams-bot#readme",
     "volta": {
-        "node": "14.16.1"
+        "node": "20.17.0"
     }
 }

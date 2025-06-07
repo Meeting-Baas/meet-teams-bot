@@ -1,4 +1,4 @@
-FROM node:18-bullseye
+FROM node:20-bullseye
 
 # Install system dependencies required for Playwright, Chrome extensions, Xvfb, FFmpeg and AWS CLI
 RUN apt-get update \
@@ -26,12 +26,15 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Optimize FFmpeg performance settings
-ENV FFMPEG_THREAD_COUNT=0
-ENV FFMPEG_PRESET=ultrafast
+# Performance optimization environment variables
+# Increase Node.js heap size to handle large meeting recordings and prevent memory issues
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+# Optimize UV thread pool size for I/O operations
+ENV UV_THREADPOOL_SIZE=4
 
-# Set CPU optimization flags
-ENV NODE_OPTIONS="--max-old-space-size=2048"
+# Chrome browser optimization settings
+ENV CHROME_DEVEL_SANDBOX=false
+ENV CHROME_NO_SANDBOX=true
 
 # Install AWS CLI v2
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
@@ -47,8 +50,9 @@ COPY package.json package-lock.json ./
 COPY chrome_extension/package.json chrome_extension/package-lock.json ./chrome_extension/
 
 # Install dependencies for the server and the extension
-RUN npm ci  \
-    && npm ci --prefix chrome_extension
+
+RUN npm install --legacy-peer-deps \
+    && npm install --prefix chrome_extension --legacy-peer-deps
 
 # Install Playwright browsers using the local version
 RUN npx  playwright install --with-deps chromium
