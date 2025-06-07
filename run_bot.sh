@@ -83,9 +83,27 @@ create_output_dir() {
 # Process JSON configuration to add UUID if missing
 process_config() {
     local config_json=$1
+    local use_api_mode=$2
     local bot_uuid=$(generate_uuid)
     
     print_info "Generated new bot_uuid: $bot_uuid" >&2
+    
+    # Load environment variables from .env file only if needed for API mode
+    if [ "$use_api_mode" = "true" ]; then
+        if [ -f ".env" ]; then
+            source .env
+            if [ -z "$API_SERVER_BASEURL" ]; then
+                print_error "API_SERVER_BASEURL not found in .env file (required for API mode)"
+                exit 1
+            fi
+        else
+            print_error ".env file not found (required for API mode)"
+            print_info "Please create a .env file with:"
+            print_info "API_SERVER_BASEURL=your_api_url"
+            print_info "Or run in serverless mode (default) which doesn't require these"
+            exit 1
+        fi
+    fi
     
     # Check if bot_uuid already exists in the config
     if echo "$config_json" | grep -q '"bot_uuid"[[:space:]]*:[[:space:]]*"[^"]*"'; then
@@ -107,6 +125,7 @@ process_config() {
 run_with_config() {
     local config_file=$1
     local override_meeting_url=$2
+    local use_api_mode=$3
     
     if [ ! -f "$config_file" ]; then
         print_error "Configuration file '$config_file' not found"
@@ -129,7 +148,7 @@ run_with_config() {
         fi
     fi
     
-    local processed_config=$(process_config "$config_json")
+    local processed_config=$(process_config "$config_json" "$use_api_mode")
     
     print_info "Running Meet Teams Bot with optimized configuration: $config_file"
     if [ -n "$override_meeting_url" ]; then
@@ -137,6 +156,12 @@ run_with_config() {
     fi
     print_info "Output directory: $output_dir"
     print_info "Performance: 4 CPU cores, 7GB RAM (Docker Compose)"
+    
+    if [ "$use_api_mode" = "true" ]; then
+        print_info "Mode: API (with MeetingBaas backend)"
+    else
+        print_info "Mode: Serverless (standalone)"
+    fi
     
     # Debug: Show what we're sending to Docker (first 200 chars)
     local preview=$(echo "$processed_config" | head -c 200)
@@ -149,6 +174,13 @@ run_with_config() {
         exit 1
     fi
     
+    # Set environment variables for Docker
+    if [ "$use_api_mode" = "true" ]; then
+        export SERVERLESS=false
+        export API_SERVER_BASEURL
+    else
+        export SERVERLESS=true
+    fi
 
     # Run using Docker Compose with optimized configuration
     if command -v docker-compose &> /dev/null; then
@@ -173,12 +205,19 @@ run_with_config() {
 # Run bot with JSON input
 run_with_json() {
     local json_input=$1
+    local use_api_mode=$2
     local output_dir=$(create_output_dir)
-    local processed_config=$(process_config "$json_input")
+    local processed_config=$(process_config "$json_input" "$use_api_mode")
     
     print_info "Running Meet Teams Bot with optimized JSON configuration"
     print_info "Output directory: $output_dir"
     print_info "Performance: 4 CPU cores, 7GB RAM (Docker Compose)"
+    
+    if [ "$use_api_mode" = "true" ]; then
+        print_info "Mode: API (with MeetingBaas backend)"
+    else
+        print_info "Mode: Serverless (standalone)"
+    fi
     
     # Debug: Show what we're sending to Docker (first 200 chars)
     local preview=$(echo "$processed_config" | head -c 200)
@@ -189,6 +228,14 @@ run_with_json() {
         print_error "Processed configuration is empty or invalid"
         print_info "Original config: $json_input"
         exit 1
+    fi
+    
+    # Set environment variables for Docker
+    if [ "$use_api_mode" = "true" ]; then
+        export SERVERLESS=false
+        export API_SERVER_BASEURL
+    else
+        export SERVERLESS=true
     fi
     
     # Run using Docker Compose with optimized configuration
@@ -293,11 +340,13 @@ show_help() {
     echo "Meet Teams Bot - Optimized Serverless Runner"
     echo
     echo "Usage:"
-    echo "  $0 build                     - Build optimized Docker image (Docker Compose)"
-    echo "  $0 run <config_file> [url]   - Run bot with configuration file (optional meeting URL override)"
-    echo "  $0 run-json '<json>'         - Run bot with JSON configuration"
-    echo "  $0 clean                     - Complete cleanup (Docker + files)"
-    echo "  $0 help                      - Show this help message"
+    echo "  $0 build                          - Build optimized Docker image (Docker Compose)"
+    echo "  $0 run <config_file> [url]        - Run bot with configuration file (optional meeting URL override)"
+    echo "  $0 run-json '<json>'              - Run bot with JSON configuration"
+    echo "  $0 run-api <config_file> [url]    - Run bot in API mode with configuration file"
+    echo "  $0 run-api-json '<json>'          - Run bot in API mode with JSON configuration"
+    echo "  $0 clean                          - Complete cleanup (Docker + files)"
+    echo "  $0 help                           - Show this help message"
     echo
     echo "Examples:"
     echo "  $0 build"
@@ -305,6 +354,10 @@ show_help() {
     echo "  $0 run params.json 'https://meet.google.com/new-meeting-url'"
     echo "  $0 run-json '{\"meeting_url\":\"https://meet.google.com/abc-def-ghi\", \"bot_name\":\"RecordingBot\"}'"
     echo "  $0 clean"
+    echo
+    echo "Modes:"
+    echo "  • Serverless (default): Standalone operation, saves files locally"
+    echo "  • API mode: Connects to MeetingBaas backend, requires authentication"
     echo
     echo "Performance Optimizations (Built-in):"
     echo "  • 4 CPU cores limit for optimal performance"
@@ -330,6 +383,9 @@ show_help() {
     echo
     echo "Configuration file should contain JSON with meeting parameters."
     echo "See params.json for example format."
+    echo
+    echo "For API mode, create a .env file with:"
+    echo "  API_SERVER_BASEURL=https://api.meeting-baas.com"
 }
 
 # Main script logic
@@ -346,7 +402,16 @@ main() {
                 exit 1
             fi
             check_docker
-            run_with_config "$2" "$3"
+            run_with_config "$2" "$3" "false"
+            ;;
+        "run-api")
+            if [ -z "${2:-}" ]; then
+                print_error "Please specify a configuration file"
+                print_info "Usage: $0 run-api <config_file> [meeting_url]"
+                exit 1
+            fi
+            check_docker
+            run_with_config "$2" "$3" "true"
             ;;
         "run-json")
             if [ -z "${2:-}" ]; then
@@ -355,7 +420,16 @@ main() {
                 exit 1
             fi
             check_docker
-            run_with_json "$2"
+            run_with_json "$2" "false"
+            ;;
+        "run-api-json")
+            if [ -z "${2:-}" ]; then
+                print_error "Please provide JSON configuration"
+                print_info "Usage: $0 run-api-json '<json_config>'"
+                exit 1
+            fi
+            check_docker
+            run_with_json "$2" "true"
             ;;
         "clean")
             check_docker
