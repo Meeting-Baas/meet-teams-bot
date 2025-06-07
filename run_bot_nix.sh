@@ -92,10 +92,6 @@ process_config() {
     if [ "$use_api_mode" = "true" ]; then
         if [ -f ".env" ]; then
             source .env
-            if [ -z "$BOT_TOKEN" ]; then
-                print_error "BOT_TOKEN not found in .env file (required for API mode)"
-                exit 1
-            fi
             if [ -z "$API_SERVER_BASEURL" ]; then
                 print_error "API_SERVER_BASEURL not found in .env file (required for API mode)"
                 exit 1
@@ -103,7 +99,6 @@ process_config() {
         else
             print_error ".env file not found (required for API mode)"
             print_info "Please create a .env file with:"
-            print_info "BOT_TOKEN=your_token"
             print_info "API_SERVER_BASEURL=your_api_url"
             print_info "Or run in serverless mode (default) which doesn't require these"
             exit 1
@@ -187,7 +182,6 @@ run_with_config() {
     if [ "$use_api_mode" = "true" ]; then
         export SERVERLESS=false
         export API_SERVER_BASEURL
-        export BOT_TOKEN
     else
         export SERVERLESS=true
     fi
@@ -239,7 +233,6 @@ run_with_json() {
     if [ "$use_api_mode" = "true" ]; then
         export SERVERLESS=false
         export API_SERVER_BASEURL
-        export BOT_TOKEN
     else
         export SERVERLESS=true
     fi
@@ -295,7 +288,6 @@ show_help() {
     echo "  $0 run params.json"
     echo "  $0 run params.json 'https://meet.google.com/new-meeting-url'"
     echo "  $0 run-json '{\"meeting_url\":\"https://meet.google.com/abc-def-ghi\", \"bot_name\":\"RecordingBot\"}'"
-    echo "  $0 run-api params.json    # Requires .env file with BOT_TOKEN and API_SERVER_BASEURL"
     echo "  $0 clean"
     echo
     echo "Modes:"
@@ -320,7 +312,6 @@ show_help() {
     echo "See params.json for example format."
     echo
     echo "For API mode, create a .env file with:"
-    echo "  BOT_TOKEN=your_token_here"
     echo "  API_SERVER_BASEURL=https://api.meeting-baas.com"
 }
 
