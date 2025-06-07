@@ -1,0 +1,13 @@
+{
+    "meeting_url": "https://meet.google.com/wkt-kqft-gyw?authuser=0",
+    "bot_name": "Recording Bot Test",
+    "speech_to_text_provider": "Default",
+    "recording_mode": "SpeakerView",
+    "mp4_s3_path": "recordings/test-output.mp4",
+    "automatic_leave": {
+        "waiting_room_timeout": 60,
+        "noone_joined_timeout": 60
+    },
+    "enter_message": "Test Recording Bot (Nix)",
+    "secret": "test-secret-key"
+} 

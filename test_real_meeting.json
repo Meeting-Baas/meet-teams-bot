@@ -1,0 +1,10 @@
+{
+    "meeting_url": "https://meet.google.com/lookup/test-meeting",
+    "bot_name": "Bot Ducobu Test",
+    "custom_branding_bot_path": "https://i.ibb.co/N9YtnDZ/ducobu.jpg",
+    "recording_mode": "SpeakerView",
+    "automatic_leave": {
+        "waiting_room_timeout": 10,
+        "noone_joined_timeout": 10
+    }
+} 

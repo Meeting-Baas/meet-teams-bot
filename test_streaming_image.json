@@ -1,0 +1,11 @@
+{
+    "meeting_url": "https://meet.google.com/dmm-maai-ibi?authuser=0",
+    "bot_name": "Test Streaming Bot",
+    "custom_branding_bot_path": "https://i.ibb.co/N9YtnDZ/ducobu.jpg",
+    "recording_mode": "SpeakerView",
+    "automatic_leave": {
+        "waiting_room_timeout": 15,
+        "noone_joined_timeout": 15
+    },
+    "secret": "1234567890"
+} 

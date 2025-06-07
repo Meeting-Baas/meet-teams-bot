@@ -1,0 +1,26 @@
+{
+  "id": "test-meeting-123",
+  "use_my_vocabulary": false,
+  "meeting_url": "https://meet.google.com/test-meeting-url",
+  "user_token": "test-token",
+  "bot_name": "Ducobu Bot",
+  "user_id": 123,
+  "session_id": "test-session-123",
+  "email": "test@example.com",
+  "meetingProvider": "Meet",
+  "bot_branding": true,
+  "has_installed_extension": true,
+  "custom_branding_bot_path": "https://i.ibb.co/N9YtnDZ/ducobu.jpg",
+  "vocabulary": [],
+  "force_lang": false,
+  "bot_uuid": "test-bot-uuid-123",
+  "bots_api_key": "test-api-key",
+  "recording_mode": "speaker_view",
+  "local_recording_server_location": "test-location",
+  "automatic_leave": {
+    "waiting_room_timeout": 60,
+    "noone_joined_timeout": 300
+  },
+  "mp4_s3_path": "test-path",
+  "secret": "test-secret"
+} 
