@@ -327,37 +327,38 @@ export async function server() {
         process.exit(0)
     })
 
+    // COMMENTED OUT - Video recording disabled
     // In server.ts, we receive chunks but there is no logging
-    app.post('/transcoder/upload_chunk', async (req, res) => {
-        return await uploadChunk(req, res, false)
-    })
+    // app.post('/transcoder/upload_chunk', async (req, res) => {
+    //     return await uploadChunk(req, res, false)
+    // })
 
-    async function uploadChunk(req: any, res: any, isFinal: boolean) {
-        if (!req.body || !Buffer.isBuffer(req.body)) {
-            console.log('Invalid chunk received:', typeof req.body)
-            return res.status(400).json({ error: 'Invalid chunk format' })
-        }
+    // async function uploadChunk(req: any, res: any, isFinal: boolean) {
+    //     if (!req.body || !Buffer.isBuffer(req.body)) {
+    //         console.log('Invalid chunk received:', typeof req.body)
+    //         return res.status(400).json({ error: 'Invalid chunk format' })
+    //     }
 
-        console.log('Chunk received:', {
-            size: req.body.length,
-            isFinal,
-            timestamp: Date.now(),
-        })
+    //     console.log('Chunk received:', {
+    //         size: req.body.length,
+    //         isFinal,
+    //         timestamp: Date.now(),
+    //     })
 
-        try {
-            await TRANSCODER.uploadChunk(req.body, isFinal)
-            return res
-                .status(200)
-                .json({ message: 'Chunk uploaded successfully' })
-        } catch (err) {
-            console.error('Error uploading chunk:', err)
-            return res.status(500).json({ error: 'Chunk upload failed' })
-        }
-    }
+    //     try {
+    //         await TRANSCODER.uploadChunk(req.body, isFinal)
+    //         return res
+    //             .status(200)
+    //             .json({ message: 'Chunk uploaded successfully' })
+    //     } catch (err) {
+    //         console.error('Error uploading chunk:', err)
+    //         return res.status(500).json({ error: 'Chunk upload failed' })
+    //     }
+    // }
 
-    app.post('/transcoder/upload_chunk_final', async (req, res) => {
-        return await uploadChunk(req, res, true)
-    })
+    // app.post('/transcoder/upload_chunk_final', async (req, res) => {
+    //     return await uploadChunk(req, res, true)
+    // })
 
     // Stop Transcoder
     app.post('/transcoder/stop', async (req, res) => {

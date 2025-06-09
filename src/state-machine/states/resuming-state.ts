@@ -1,5 +1,4 @@
 import { Events } from '../../events'
-import { TRANSCODER } from '../../recording/Transcoder'
 
 import { MeetingStateType, StateExecuteResult } from '../types'
 import { BaseState } from './base-state'
@@ -40,37 +39,8 @@ export class ResumingState extends BaseState {
     }
 
     private async resumeRecording(): Promise<void> {
-        const resumePromise = async () => {
-            // Resume the MediaRecorder in the browser
-            await this.context.backgroundPage?.evaluate(() => {
-                const w = window as any
-                return w.resumeMediaRecorder?.()
-            })
-
-            // Reprendre le Transcoder
-            await TRANSCODER.resume()
-
-            // Reprendre le streaming
-            if (this.context.streamingService) {
-                this.context.streamingService.resume()
-            }
-
-            console.log('Recording resumed successfully')
-        }
-
-        const timeoutPromise = new Promise<void>(
-            (_, reject) =>
-                setTimeout(
-                    () => reject(new Error('Resume recording timeout')),
-                    20000,
-                ), // 20 secondes
-        )
-
-        try {
-            await Promise.race([resumePromise(), timeoutPromise])
-        } catch (error) {
-            console.error('Error or timeout in resumeRecording:', error)
-            throw error
-        }
+        // VIDEO RECORDING DISABLED - No MediaRecorder to resume
+        console.log('Video recording disabled - audio streaming was never paused')
+        return Promise.resolve()
     }
 }

@@ -16,7 +16,7 @@ export async function startRecording(
 
         await ApiService.sendMessageToRecordingServer(
             'LOG',
-            'FROM_EXTENSION: ************ Start recording launched. ************',
+            'FROM_EXTENSION: ************ Start recording launched (VIDEO RECORDING DISABLED - AUDIO ONLY). ************',
         )
 
         await record.initMediaRecorder(
@@ -72,6 +72,7 @@ export async function remove_shitty_html(
 }
 
 export async function stopMediaRecorder(): Promise<void> {
+    console.log('Stopping media recorder (video recording was disabled)')
     return await record.stop()
 }
 
@@ -116,8 +117,8 @@ setUserAgent(
 )
 
 const w = window as any
-w.startRecording = startRecording // Start screen recording
-w.stopMediaRecorder = stopMediaRecorder // stop screen recording
+w.startRecording = startRecording // Start screen recording (audio only)
+w.stopMediaRecorder = stopMediaRecorder // stop screen recording (audio only)
 w.stopAudioStreaming = stopAudioStreaming // Stop audio streaming
 w.start_speakers_observer = start_speakers_observer // Start speakers observer
 w.remove_shitty_html = remove_shitty_html // Remove shitty Html

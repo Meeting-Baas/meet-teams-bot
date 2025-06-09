@@ -1,5 +1,4 @@
 import { Events } from '../../events'
-import { TRANSCODER } from '../../recording/Transcoder'
 
 import { MEETING_CONSTANTS } from '../constants'
 import { MeetingStateType, StateExecuteResult } from '../types'
@@ -67,37 +66,8 @@ export class PausedState extends BaseState {
     }
 
     private async pauseRecording(): Promise<void> {
-        const pausePromise = async () => {
-            // Pause the MediaRecorder in the browser
-            await this.context.backgroundPage?.evaluate(() => {
-                const w = window as any
-                return w.pauseMediaRecorder?.()
-            })
-
-            // Pause du Transcoder
-            await TRANSCODER.pause()
-
-            // Pause du streaming
-            if (this.context.streamingService) {
-                this.context.streamingService.pause()
-            }
-
-            console.log('Recording paused successfully')
-        }
-
-        const timeoutPromise = new Promise<void>(
-            (_, reject) =>
-                setTimeout(
-                    () => reject(new Error('Pause recording timeout')),
-                    20000,
-                ), // 20 secondes
-        )
-
-        try {
-            await Promise.race([pausePromise(), timeoutPromise])
-        } catch (error) {
-            console.error('Error or timeout in pauseRecording:', error)
-            throw error
-        }
+        // VIDEO RECORDING DISABLED - No MediaRecorder to pause
+        console.log('Video recording disabled - audio streaming continues during pause')
+        return Promise.resolve()
     }
 }
