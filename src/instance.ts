@@ -1,7 +1,10 @@
 import { exec } from 'child_process'
 import { clientRedis } from './server'
+import { Instance, InstanceConfig } from './types'
 
-export const PORT = 8080
+// Allow dynamic port configuration for multiple bot instances
+export const PORT = process.env.BOT_HTTP_PORT ? parseInt(process.env.BOT_HTTP_PORT) : 8080
+export const WS_PORT = process.env.BOT_WS_PORT ? parseInt(process.env.BOT_WS_PORT) : 8081
 export const LOCK_INSTANCE_AT_STARTUP =
     process.env.LOCK_INSTANCE_AT_STARTUP === 'true'
 export const API_SERVER_BASEURL = process.env.API_SERVER_BASEURL
@@ -65,4 +68,22 @@ export async function terminateInstance() {
         })
     })
     process.exit(0)
+}
+
+export async function createInstance(config: InstanceConfig): Promise<Instance> {
+    // Get ports from config or use defaults
+    const http_port = config.http_port || PORT
+    const ws_port = config.ws_port || WS_PORT
+
+    // Create instance with configured ports
+    const instance: Instance = {
+        name: config.name,
+        http_port,
+        ws_port,
+    }
+
+    // Log port configuration
+    console.log(`Instance ${config.name} configured with HTTP port ${http_port} and WebSocket port ${ws_port}`)
+
+    return instance
 }

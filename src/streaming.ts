@@ -7,7 +7,8 @@ import { SoundContext } from './media_context'
 import { SpeakerData } from './types'
 import { PathManager } from './utils/PathManager'
 
-const EXTENSION_WEBSOCKET_PORT: number = 8081
+// Use environment variable or config for WebSocket port, fallback to 8081
+const EXTENSION_WEBSOCKET_PORT: number = process.env.BOT_WS_PORT ? parseInt(process.env.BOT_WS_PORT) : 8081
 const DEFAULT_SAMPLE_RATE: number = 24_000
 
 export class Streaming {
@@ -75,11 +76,16 @@ export class Streaming {
             return
         }
 
+        // Get WebSocket port from environment or config
+        const wsPort = process.env.BOT_WS_PORT ? parseInt(process.env.BOT_WS_PORT) : EXTENSION_WEBSOCKET_PORT
+        console.log(`Starting WebSocket server on port ${wsPort}`)
+
         // Always create the extension WebSocket server to receive audio from the extension
         try {
             this.extension_ws = new WebSocket.Server({
-                port: EXTENSION_WEBSOCKET_PORT,
+                port: wsPort,
             })
+            console.log(`WebSocket server running on port ${wsPort}`)
         } catch (error) {
             console.error(`Failed to create WebSocket server: ${error}`)
             return

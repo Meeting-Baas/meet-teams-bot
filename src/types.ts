@@ -156,3 +156,17 @@ export enum JoinErrorCode {
     InvalidMeetingUrl = 'InvalidMeetingUrl',
     StreamingSetupFailed = 'StreamingSetupFailed',
 }
+
+export interface InstanceConfig {
+    name: string
+    http_port?: number
+    ws_port?: number
+    // Add other configuration options as needed
+}
+
+export interface Instance {
+    name: string
+    http_port: number
+    ws_port: number
+    // Add other instance properties as needed
+}
