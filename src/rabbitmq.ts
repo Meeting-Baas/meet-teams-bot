@@ -154,11 +154,11 @@ export class Consumer {
     static async handleStartRecord(data: MeetingParams) {
         console.log('handleStartRecord')
 
-        const grafanaService = GrafanaService.getInstance()
+        // const grafanaService = GrafanaService.getInstance()
 
-        // Mettre à jour la configuration de Grafana Agent
-        grafanaService.setBotUuid(data.bot_uuid)
-        await grafanaService.updateGrafanaAgentWithBotUuid()
+        // // Mettre à jour la configuration de Grafana Agent
+        // grafanaService.setBotUuid(data.bot_uuid)
+        // await grafanaService.updateGrafanaAgentWithBotUuid()
 
         // Redirect logs to bot-specific file
         console.log('About to redirect logs to bot:', data.bot_uuid)

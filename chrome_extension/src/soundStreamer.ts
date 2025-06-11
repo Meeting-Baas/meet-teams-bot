@@ -1,4 +1,35 @@
-const LOCAL_WEBSOCKET_URL: string = 'ws://localhost:8081'
+// Get WebSocket port from Chrome command line arguments or environment
+const getWsPort = (): string => {
+    // Try to get port from Chrome command line args
+    const args = chrome.runtime.getManifest().args || [];
+    const wsPortArg = args.find((arg: string) => arg.startsWith('--ws-port='));
+    if (wsPortArg) {
+        const port = wsPortArg.split('=')[1];
+        console.log('Using WebSocket port from Chrome args:', port);
+        return port;
+    }
+
+    // Try to get port from window object (set by bot)
+    const windowPort = (window as any).BOT_WS_PORT;
+    if (windowPort) {
+        console.log('Using WebSocket port from window:', windowPort);
+        return windowPort;
+    }
+
+    // Try to get port from environment variable (for development)
+    const envPort = process.env.BOT_WS_PORT;
+    if (envPort) {
+        console.log('Using WebSocket port from environment:', envPort);
+        return envPort;
+    }
+
+    // Fallback to default
+    console.log('Using default WebSocket port: 9003');
+    return '9003';
+};
+
+const WS_PORT = getWsPort();
+const LOCAL_WEBSOCKET_URL: string = `ws://localhost:${WS_PORT}`
 const DEFAULT_SAMPLE_RATE: number = 24_000 // 24khz sample frequency
 const BUFFER_SIZE: number = 256 // Assuming chunks of 62.5 ms
 

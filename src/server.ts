@@ -14,7 +14,8 @@ import { SpeakerManager } from './speaker-manager'
 import { RecordingEndReason } from './state-machine/types'
 
 const HOST = '0.0.0.0'
-export const PORT = 8080
+// Use environment variable or config for port, fallback to 8080
+export const PORT = process.env.BOT_HTTP_PORT ? parseInt(process.env.BOT_HTTP_PORT) : 8080
 
 console.log('redis url: ', process.env.REDIS_URL)
 export const clientRedis = redis.createClient({
@@ -42,6 +43,10 @@ async function getAllowedOrigins(): Promise<string[]> {
 export async function server() {
     const app = express()
     const allowedOrigins = await getAllowedOrigins()
+
+    // Get port from environment or config
+    const port = process.env.BOT_HTTP_PORT ? parseInt(process.env.BOT_HTTP_PORT) : PORT
+    console.log(`Starting server on port ${port}`)
 
     app.use(express.urlencoded({ extended: true }))
     app.use(express.raw({ type: 'application/octet-stream', limit: '1000mb' }))
@@ -375,8 +380,8 @@ export async function server() {
     })
 
     try {
-        app.listen(PORT, HOST)
-        console.log(`Running on http://${HOST}:${PORT}`)
+        app.listen(port, HOST)
+        console.log(`Running on http://${HOST}:${port}`)
     } catch (e) {
         console.error(`Failed to register instance: ${e}`)
     }

@@ -3,7 +3,8 @@ import { join } from 'path'
 
 // const EXTENSION_NAME = 'spoke'
 const EXTENSION_ID = 'eahilodcoaonodbfiijhpmfnddkfhmbl'
-const USER_DATA_DIR = '/tmp/test-user-data-dir'
+// Dynamic user data directory based on bot instance
+const USER_DATA_DIR = process.env.BOT_BROWSER_PROFILE || '/tmp/test-user-data-dir'
 
 type Resolution = {
     width: number
@@ -36,8 +37,90 @@ var RESOLUTION: Resolution = P720
  * @param slowMo Whether to enable slow motion mode for debugging (adds 100ms delay)
  * @returns Promise resolving to browser context and background page for extension interaction
  */
+async function verifyExtensionInitialization(backgroundPage: Page): Promise<boolean> {
+    try {
+        // Add a small delay to allow for extension initialization
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        
+        // Simple check if required functions exist
+        const functionsExist = await backgroundPage.evaluate(() => {
+            const w = window as any
+            return {
+                startRecording: typeof w.startRecording === 'function',
+                start_speakers_observer: typeof w.start_speakers_observer === 'function',
+                remove_shitty_html: typeof w.remove_shitty_html === 'function'
+            }
+        })
+
+        console.log('Extension functions check:', functionsExist)
+        return functionsExist.startRecording && functionsExist.start_speakers_observer
+    } catch (error) {
+        console.error('Failed to verify extension initialization:', error)
+        return false
+    }
+}
+
+async function cleanupBrowserSession(userDataDir: string): Promise<void> {
+    try {
+        // Kill any existing Chrome processes using this profile
+        const fs = require('fs')
+        const path = require('path')
+        
+        // Read the lock file if it exists
+        const lockFile = path.join(userDataDir, 'SingletonLock')
+        if (fs.existsSync(lockFile)) {
+            try {
+                const lockContent = fs.readFileSync(lockFile, 'utf8')
+                const pid = parseInt(lockContent.trim())
+                if (pid && pid > 0) {
+                    try {
+                        process.kill(pid, 0) // Check if process exists
+                        process.kill(pid, 'SIGTERM') // Try graceful shutdown
+                        // Wait a bit for process to terminate
+                        await new Promise(resolve => setTimeout(resolve, 1000))
+                    } catch (e) {
+                        // Process doesn't exist or already dead
+                    }
+                }
+            } catch (e) {
+                // Lock file read failed, continue with cleanup
+            }
+        }
+
+        // Remove Chrome lock files
+        const lockFiles = [
+            'SingletonLock',
+            'SingletonSocket',
+            'SingletonSocket.lock',
+            'SingletonCookie',
+            'SingletonCookie-journal'
+        ]
+        
+        for (const file of lockFiles) {
+            try {
+                fs.unlinkSync(path.join(userDataDir, file))
+            } catch (e) {
+                // Ignore errors if files don't exist
+            }
+        }
+
+        // Clean up crash dumps
+        const crashDir = path.join(userDataDir, 'Crashpad')
+        if (fs.existsSync(crashDir)) {
+            try {
+                fs.rmSync(crashDir, { recursive: true, force: true })
+            } catch (e) {
+                // Ignore cleanup errors
+            }
+        }
+
+        console.log('Browser session cleanup completed for:', userDataDir)
+    } catch (error) {
+        console.warn('Browser session cleanup failed:', error)
+    }
+}
+
 export async function openBrowser(
-    // useChromium: boolean,
     lowResolution: boolean,
     slowMo: boolean = false,
 ): Promise<{ browser: BrowserContext; backgroundPage: Page }> {
@@ -57,6 +140,15 @@ export async function openBrowser(
     const width = RESOLUTION.width
     const height = RESOLUTION.height
 
+    // Get unique browser profile and audio device from environment
+    const botInstanceId = process.env.BOT_INSTANCE_ID || 'default'
+    const audioDevice = process.env.BOT_AUDIO_DEVICE || 'default'
+    const userDataDir = process.env.BOT_BROWSER_PROFILE || USER_DATA_DIR
+    
+    console.log(`🤖 Browser config for bot instance: ${botInstanceId}`)
+    console.log(`🔊 Using audio device: ${audioDevice}`)
+    console.log(`🌐 Using profile directory: ${userDataDir}`)
+
     try {
         console.log('Launching persistent context...')
 
@@ -67,7 +159,15 @@ export async function openBrowser(
             throw new Error('Extension path not found')
         }
 
-        const context = await chromium.launchPersistentContext('', {
+        // Create unique user data directory
+        if (!fs.existsSync(userDataDir)) {
+            fs.mkdirSync(userDataDir, { recursive: true })
+        }
+
+        // Clean up any existing browser session
+        await cleanupBrowserSession(userDataDir)
+
+        const context = await chromium.launchPersistentContext(userDataDir, {
             headless: false,
             viewport: { width, height },
             args: [
@@ -75,39 +175,43 @@ export async function openBrowser(
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 
-                // Chrome extension configuration (required for recording functionality)
+                // Chrome extension configuration
                 `--disable-extensions-except=${pathToExtension}`,
                 `--load-extension=${pathToExtension}`,
                 `--allowlisted-extension-id=${EXTENSION_ID}`,
                 
-                // WebRTC optimizations (required for meeting audio/video capture)
+                // Audio device isolation (if not default)
+                ...(audioDevice !== 'default' ? [
+                    `--force-device-scale-factor=1`,
+                    `--audio-buffer-size=2048`,
+                    `--disable-features=AudioServiceOutOfProcess`,
+                ] : []),
+                
+                // WebRTC optimizations
                 '--disable-rtc-smoothness-algorithm',
                 '--disable-webrtc-hw-decoding',
                 '--disable-webrtc-hw-encoding',
                 '--autoplay-policy=no-user-gesture-required',
                 
-                // Performance and resource management optimizations
+                // Performance optimizations
                 '--disable-blink-features=AutomationControlled',
                 '--disable-background-timer-throttling',
                 '--enable-features=SharedArrayBuffer',
-                '--memory-pressure-off',              // Disable memory pressure handling for consistent performance
-                '--max_old_space_size=4096',          // Increase V8 heap size to 4GB for large meetings
-                '--disable-background-networking',    // Reduce background network activity
-                '--disable-features=TranslateUI',     // Disable translation features to save resources
-                '--disable-features=AutofillServerCommunication', // Disable autofill to reduce network usage
-                '--disable-component-extensions-with-background-pages', // Reduce background extension overhead
-                '--disable-default-apps',             // Disable default Chrome apps
-                '--renderer-process-limit=4',         // Limit renderer processes to prevent resource exhaustion
-                '--disable-ipc-flooding-protection',  // Improve IPC performance for high-frequency operations
-                '--aggressive-cache-discard',         // Enable aggressive cache management for memory efficiency
-                '--disable-features=MediaRouter',     // Disable media router for reduced overhead
+                '--memory-pressure-off',
+                '--max_old_space_size=4096',
+                '--disable-background-networking',
+                '--disable-features=TranslateUI',
+                '--disable-features=AutofillServerCommunication',
+                '--disable-component-extensions-with-background-pages',
+                '--disable-default-apps',
+                '--renderer-process-limit=4',
+                '--disable-ipc-flooding-protection',
+                '--aggressive-cache-discard',
+                '--disable-features=MediaRouter',
                 
-                // Certificate and security optimizations for meeting platforms
+                // Certificate and security optimizations
                 '--ignore-certificate-errors',
                 '--allow-insecure-localhost',
-                '--disable-blink-features=TrustedDOMTypes',
-                '--disable-features=TrustedScriptTypes',
-                '--disable-features=TrustedHTML',
             ],
             slowMo: slowMo ? 100 : undefined,
             permissions: ['microphone', 'camera'],
@@ -119,49 +223,63 @@ export async function openBrowser(
 
         console.log('Waiting for background page...')
         let backgroundPage = null
-
-        // Check if a background page already exists
-        const existingBackgroundPages = context.backgroundPages()
-        if (existingBackgroundPages.length > 0) {
-            backgroundPage = existingBackgroundPages[0]
-            console.log('Found existing background page')
-        } else {
-            // Wait with explicit timeout
-            console.log('No background page found, waiting for event...')
-            try {
-                backgroundPage = await Promise.race([
-                    context.waitForEvent('backgroundpage'),
-                    new Promise((_, reject) =>
-                        setTimeout(
-                            () => reject(new Error('Background page timeout')),
-                            60000,
+        let retryCount = 0
+        const maxRetries = 3
+        
+        while (retryCount < maxRetries) {
+            // Check if a background page already exists
+            const existingBackgroundPages = context.backgroundPages()
+            if (existingBackgroundPages.length > 0) {
+                backgroundPage = existingBackgroundPages[0]
+                console.log('Found existing background page')
+            } else {
+                // Wait with explicit timeout
+                console.log('No background page found, waiting for event...')
+                try {
+                    backgroundPage = await Promise.race([
+                        context.waitForEvent('backgroundpage'),
+                        new Promise((_, reject) =>
+                            setTimeout(
+                                () => reject(new Error('Background page timeout')),
+                                60000,
+                            ),
                         ),
-                    ),
-                ])
-            } catch (timeoutError) {
-                console.error(
-                    'Timeout waiting for background page:',
-                    timeoutError,
-                )
-                // Essayer de forcer le chargement de l'extension
-                await context.newPage().then((page) => page.close())
-                // Réessayer de trouver la page d'arrière-plan
-                const retryBackgroundPages = context.backgroundPages()
-                if (retryBackgroundPages.length > 0) {
-                    backgroundPage = retryBackgroundPages[0]
-                    console.log('Found background page after retry')
+                    ])
+                } catch (timeoutError) {
+                    console.error('Timeout waiting for background page:', timeoutError)
+                    retryCount++
+                    if (retryCount < maxRetries) {
+                        console.log(`Retrying background page initialization (${retryCount}/${maxRetries})...`)
+                        await new Promise(resolve => setTimeout(resolve, 2000))
+                        continue
+                    }
+                    throw timeoutError
                 }
+            }
+
+            // Verify extension initialization
+            const initialized = await verifyExtensionInitialization(backgroundPage)
+            if (initialized) {
+                console.log('Background page found and verified')
+                return { browser: context, backgroundPage }
+            }
+
+            retryCount++
+            if (retryCount < maxRetries) {
+                console.log(`Extension verification failed, retrying (${retryCount}/${maxRetries})...`)
+                await new Promise(resolve => setTimeout(resolve, 2000))
+                continue
             }
         }
 
-        if (!backgroundPage) {
-            throw new Error('Could not find extension background page')
-        }
-
-        console.log('Background page found')
-        return { browser: context, backgroundPage }
+        throw new Error('Could not verify extension initialization after multiple retries')
     } catch (error) {
-        console.error('Failed to open browser:', error)
+        console.error('Failed to open browser:', {
+            name: error instanceof Error ? error.name : 'Unknown',
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+            error: error
+        })
         throw error
     }
 }

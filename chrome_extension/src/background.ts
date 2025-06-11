@@ -110,14 +110,30 @@ function setUserAgent(window: Window, userAgent: string) {
     }
 }
 
+// Simple function exposure with logging
+console.log('Background script starting initialization...')
+
+// Direct function exposure with verification
+const functions = {
+    startRecording,
+    stopMediaRecorder,
+    stopAudioStreaming,
+    start_speakers_observer,
+    remove_shitty_html
+}
+
+// Expose functions directly to window
+Object.entries(functions).forEach(([name, fn]) => {
+    try {
+        (window as any)[name] = fn
+        console.log(`✅ Exposed ${name} to window object`)
+    } catch (e) {
+        console.error(`❌ Failed to expose ${name}:`, e)
+    }
+})
+
+// Keep the user agent setting
 setUserAgent(
     window,
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
 )
-
-const w = window as any
-w.startRecording = startRecording // Start screen recording
-w.stopMediaRecorder = stopMediaRecorder // stop screen recording
-w.stopAudioStreaming = stopAudioStreaming // Stop audio streaming
-w.start_speakers_observer = start_speakers_observer // Start speakers observer
-w.remove_shitty_html = remove_shitty_html // Remove shitty Html

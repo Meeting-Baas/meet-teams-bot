@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Meet Teams Bot - Serverless Runner
-# This script provides an easy way to run the bot in serverless mode
+# Meet Teams Bot - Nix Serverless Runner
+# This script provides an easy way to run the bot in serverless mode using Nix
 
 set -e
 
@@ -43,20 +43,34 @@ generate_uuid() {
     fi
 }
 
-# Check if Docker is available
-check_docker() {
-    if ! command -v docker &> /dev/null; then
-        print_error "Docker is not installed or not in PATH"
-        print_info "Please install Docker: https://docs.docker.com/get-docker/"
+# Check if Nix is available
+check_nix() {
+    if ! command -v nix-shell &> /dev/null; then
+        print_error "Nix is not installed or not in PATH"
+        print_info "Please install Nix: https://nixos.org/download.html"
         exit 1
     fi
 }
 
-# Build Docker image
-build_image() {
-    print_info "Building Meet Teams Bot Docker image..."
-    docker build -t meet-teams-bot .
-    print_success "Docker image built successfully"
+# Setup environment and dependencies
+setup_environment() {
+    print_info "Setting up Nix environment and dependencies..."
+    
+    # Install dependencies if not already done
+    if [ ! -d "recording_server/node_modules" ] || [ ! -d "recording_server/chrome_extension/node_modules" ]; then
+        print_info "Installing dependencies..."
+        nix-shell --run "npm install --prefix recording_server && npm install --prefix recording_server/chrome_extension"
+    fi
+    
+    # Build if not already done or if source files are newer
+    if [ ! -d "recording_server/build" ] || [ ! -d "recording_server/chrome_extension/dist" ] || \
+       [ "recording_server/src" -nt "recording_server/build" ] || \
+       [ "recording_server/chrome_extension/src" -nt "recording_server/chrome_extension/dist" ]; then
+        print_info "Building projects..."
+        nix-shell --run "npm run build --prefix recording_server && npm run build-dev --prefix recording_server/chrome_extension"
+    fi
+    
+    print_success "Environment ready"
 }
 
 # Create output directory
@@ -69,20 +83,42 @@ create_output_dir() {
 # Process JSON configuration to add UUID if missing
 process_config() {
     local config_json=$1
+    local use_api_mode=$2
     local bot_uuid=$(generate_uuid)
     
     print_info "Generated new bot_uuid: $bot_uuid" >&2
+
+    # Load environment variables from .env file only if needed for API mode
+    if [ "$use_api_mode" = "true" ]; then
+        if [ -f ".env" ]; then
+            source .env
+            if [ -z "$API_SERVER_BASEURL" ]; then
+                print_error "API_SERVER_BASEURL not found in .env file (required for API mode)"
+                exit 1
+            fi
+        else
+            print_error ".env file not found (required for API mode)"
+            print_info "Please create a .env file with:"
+            print_info "API_SERVER_BASEURL=your_api_url"
+            print_info "Or run in serverless mode (default) which doesn't require these"
+            exit 1
+        fi
+    fi
+    
+    # Add user_token to the configuration (no longer needed since we use env var)
+    # But keep bot_uuid processing
+    local config_with_token="$config_json"
     
     # Check if bot_uuid already exists in the config
-    if echo "$config_json" | grep -q '"bot_uuid"[[:space:]]*:[[:space:]]*"[^"]*"'; then
+    if echo "$config_with_token" | grep -q '"bot_uuid"[[:space:]]*:[[:space:]]*"[^"]*"'; then
         # Replace existing bot_uuid
         print_info "Replacing existing bot_uuid with new one" >&2
-        local result=$(echo "$config_json" | sed 's/"bot_uuid"[[:space:]]*:[[:space:]]*"[^"]*"/"bot_uuid": "'$bot_uuid'"/g')
+        local result=$(echo "$config_with_token" | sed 's/"bot_uuid"[[:space:]]*:[[:space:]]*"[^"]*"/"bot_uuid": "'$bot_uuid'"/g')
         echo "$result"
     else
         # Add new bot_uuid to JSON
         print_info "Adding new bot_uuid to configuration" >&2
-        local clean_json=$(echo "$config_json" | tr -d '\n' | sed 's/[[:space:]]*$//')
+        local clean_json=$(echo "$config_with_token" | tr -d '\n' | sed 's/[[:space:]]*$//')
         # Remove the last } and add our field with proper formatting
         local result=$(echo "$clean_json" | sed 's/\(.*\)}$/\1, "bot_uuid": "'$bot_uuid'"}/')
         echo "$result"
@@ -93,6 +129,7 @@ process_config() {
 run_with_config() {
     local config_file=$1
     local override_meeting_url=$2
+    local use_api_mode=$3
     
     if [ ! -f "$config_file" ]; then
         print_error "Configuration file '$config_file' not found"
@@ -115,15 +152,22 @@ run_with_config() {
         fi
     fi
     
-    local processed_config=$(process_config "$config_json")
+    local processed_config=$(process_config "$config_json" "$use_api_mode")
     
-    print_info "Running Meet Teams Bot with configuration: $config_file"
+    print_info "Running Meet Teams Bot (Nix) with configuration: $config_file"
     if [ -n "$override_meeting_url" ]; then
         print_info "Meeting URL: $override_meeting_url"
     fi
     print_info "Output directory: $output_dir"
+    print_info "Environment: Nix (Node.js 20, Webpack 5, TypeScript 5)"
     
-    # Debug: Show what we're sending to Docker (first 200 chars)
+    if [ "$use_api_mode" = "true" ]; then
+        print_info "Mode: API (with MeetingBaas backend)"
+    else
+        print_info "Mode: Serverless (standalone)"
+    fi
+    
+    # Debug: Show what we're sending to the bot (first 200 chars)
     local preview=$(echo "$processed_config" | head -c 200)
     print_info "Config preview: ${preview}..."
     
@@ -134,9 +178,15 @@ run_with_config() {
         exit 1
     fi
     
-    echo "$processed_config" | docker run -i \
-        -v "$(pwd)/$output_dir:/app/data" \
-        meet-teams-bot
+    # Set environment variables and run the bot
+    if [ "$use_api_mode" = "true" ]; then
+        export SERVERLESS=false
+        export API_SERVER_BASEURL
+    else
+        export SERVERLESS=true
+    fi
+    
+    echo "$processed_config" | nix-shell --run "cd recording_server && node build/src/main.js"
     
     print_success "Bot execution completed"
     print_info "Recordings saved to: $output_dir"
@@ -154,13 +204,21 @@ run_with_config() {
 # Run bot with JSON input
 run_with_json() {
     local json_input=$1
+    local use_api_mode=$2
     local output_dir=$(create_output_dir)
-    local processed_config=$(process_config "$json_input")
+    local processed_config=$(process_config "$json_input" "$use_api_mode")
     
-    print_info "Running Meet Teams Bot with provided JSON configuration"
+    print_info "Running Meet Teams Bot (Nix) with provided JSON configuration"
     print_info "Output directory: $output_dir"
+    print_info "Environment: Nix (Node.js 20, Webpack 5, TypeScript 5)"
     
-    # Debug: Show what we're sending to Docker (first 200 chars)
+    if [ "$use_api_mode" = "true" ]; then
+        print_info "Mode: API (with MeetingBaas backend)"
+    else
+        print_info "Mode: Serverless (standalone)"
+    fi
+    
+    # Debug: Show what we're sending to the bot (first 200 chars)
     local preview=$(echo "$processed_config" | head -c 200)
     print_info "Config preview: ${preview}..."
     
@@ -171,9 +229,15 @@ run_with_json() {
         exit 1
     fi
     
-    echo "$processed_config" | docker run -i \
-        -v "$(pwd)/$output_dir:/app/data" \
-        meet-teams-bot
+    # Set environment variables and run the bot
+    if [ "$use_api_mode" = "true" ]; then
+        export SERVERLESS=false
+        export API_SERVER_BASEURL
+    else
+        export SERVERLESS=true
+    fi
+    
+    echo "$processed_config" | nix-shell --run "cd recording_server && node build/src/main.js"
     
     print_success "Bot execution completed"
     print_info "Recordings saved to: $output_dir"
@@ -208,38 +272,55 @@ clean_recordings() {
 
 # Show help
 show_help() {
-    echo "Meet Teams Bot - Serverless Runner"
+    echo "Meet Teams Bot - Nix Serverless Runner"
     echo
     echo "Usage:"
-    echo "  $0 build                     - Build the Docker image"
-    echo "  $0 run <config_file> [url]   - Run bot with configuration file (optional meeting URL override)"
-    echo "  $0 run-json '<json>'         - Run bot with JSON configuration"
-    echo "  $0 clean                     - Clean recordings directory"
-    echo "  $0 help                      - Show this help message"
+    echo "  $0 setup                          - Setup Nix environment and build dependencies"
+    echo "  $0 run <config_file> [url]        - Run bot with configuration file (optional meeting URL override)"
+    echo "  $0 run-json '<json>'              - Run bot with JSON configuration"
+    echo "  $0 run-api <config_file> [url]    - Run bot in API mode with configuration file"
+    echo "  $0 run-api-json '<json>'          - Run bot in API mode with JSON configuration"
+    echo "  $0 clean                          - Clean recordings directory"
+    echo "  $0 help                           - Show this help message"
     echo
     echo "Examples:"
-    echo "  $0 build"
+    echo "  $0 setup"
     echo "  $0 run params.json"
     echo "  $0 run params.json 'https://meet.google.com/new-meeting-url'"
     echo "  $0 run-json '{\"meeting_url\":\"https://meet.google.com/abc-def-ghi\", \"bot_name\":\"RecordingBot\"}'"
     echo "  $0 clean"
     echo
+    echo "Modes:"
+    echo "  • Serverless (default): Standalone operation, saves files locally"
+    echo "  • API mode: Connects to MeetingBaas backend, requires authentication"
+    echo
     echo "Features:"
+    echo "  • Uses Nix environment (Node.js 20, Webpack 5, TypeScript 5)"
     echo "  • Automatically generates bot_uuid if not provided"
     echo "  • Override meeting URL by passing it as last argument"
     echo "  • Saves recordings to ./recordings directory"
     echo "  • Lists generated files after completion"
+    echo "  • Auto-setup of dependencies and build if needed"
+    echo
+    echo "Environment:"
+    echo "  • Node.js 20 (modern)"
+    echo "  • Webpack 5 + TypeScript 5"
+    echo "  • Native macOS performance (no Docker overhead)"
+    echo "  • Compatible with NixOS for production scaling"
     echo
     echo "Configuration file should contain JSON with meeting parameters."
     echo "See params.json for example format."
+    echo
+    echo "For API mode, create a .env file with:"
+    echo "  API_SERVER_BASEURL=https://api.meeting-baas.com"
 }
 
 # Main script logic
 main() {
     case "${1:-}" in
-        "build")
-            check_docker
-            build_image
+        "setup")
+            check_nix
+            setup_environment
             ;;
         "run")
             if [ -z "${2:-}" ]; then
@@ -247,8 +328,19 @@ main() {
                 print_info "Usage: $0 run <config_file> [meeting_url]"
                 exit 1
             fi
-            check_docker
-            run_with_config "$2" "$3"
+            check_nix
+            setup_environment
+            run_with_config "$2" "$3" "false"
+            ;;
+        "run-api")
+            if [ -z "${2:-}" ]; then
+                print_error "Please specify a configuration file"
+                print_info "Usage: $0 run-api <config_file> [meeting_url]"
+                exit 1
+            fi
+            check_nix
+            setup_environment
+            run_with_config "$2" "$3" "true"
             ;;
         "run-json")
             if [ -z "${2:-}" ]; then
@@ -256,8 +348,19 @@ main() {
                 print_info "Usage: $0 run-json '<json_config>'"
                 exit 1
             fi
-            check_docker
-            run_with_json "$2"
+            check_nix
+            setup_environment
+            run_with_json "$2" "false"
+            ;;
+        "run-api-json")
+            if [ -z "${2:-}" ]; then
+                print_error "Please provide JSON configuration"
+                print_info "Usage: $0 run-api-json '<json_config>'"
+                exit 1
+            fi
+            check_nix
+            setup_environment
+            run_with_json "$2" "true"
             ;;
         "clean")
             clean_recordings
