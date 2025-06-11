@@ -51,7 +51,7 @@ export interface MeetingContext {
 
     // Processus et ressources
     brandingProcess?: BrandingHandle
-    mediaRecorderActive?: boolean
+    // mediaRecorderActive?: boolean // COMMENTED OUT - MediaRecorder disabled
 
     // Gestion des erreurs et statut
     error?: Error

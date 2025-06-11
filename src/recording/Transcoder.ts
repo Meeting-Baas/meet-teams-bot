@@ -219,25 +219,29 @@ export class Transcoder extends EventEmitter {
         }
     }
 
-    // Simplified chunk processing
+    // Simplified chunk processing - VIDEO PROCESSING DISABLED
     public async uploadChunk(
         chunk: Buffer,
         isFinal: boolean = false,
     ): Promise<void> {
-        if (!this.isReadyForChunks()) return
+        console.log('Video recording disabled - uploadChunk method disabled')
+        return Promise.resolve()
+        
+        // COMMENTED OUT - Video recording disabled
+        // if (!this.isReadyForChunks()) return
 
-        try {
-            // Write directly to FFmpeg stdin
-            await this.writeToFFmpeg(chunk)
+        // try {
+        //     // Write directly to FFmpeg stdin
+        //     await this.writeToFFmpeg(chunk)
 
-            await this.videoProcessor.processChunk(chunk, isFinal)
-            if (isFinal) await this.stop()
-            this.processedChunks++
-        } catch (error) {
-            console.error('Error processing chunk:', error)
-            this.emit('error', { type: 'chunkError', error })
-            throw error
-        }
+        //     await this.videoProcessor.processChunk(chunk, isFinal)
+        //     if (isFinal) await this.stop()
+        //     this.processedChunks++
+        // } catch (error) {
+        //     console.error('Error processing chunk:', error)
+        //     this.emit('error', { type: 'chunkError', error })
+        //     throw error
+        // }
     }
 
     public async stop(): Promise<void> {

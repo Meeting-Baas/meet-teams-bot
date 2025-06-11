@@ -173,11 +173,11 @@ export class InCallState extends BaseState {
 
         console.log('Recording functions status:', recordingFunctionsExist)
 
-        // Start recording with improved error handling
+        // Start recording with improved error handling - AUDIO ONLY MODE
         let startTime: number
         try {
             if (recordingFunctionsExist.startRecordingExists) {
-                console.log('Calling startRecording with parameters:', {
+                console.log('Calling startRecording with parameters (AUDIO ONLY MODE):', {
                     local_recording_server_location:
                         this.context.params.local_recording_server_location,
                     chunk_duration: MEETING_CONSTANTS.CHUNK_DURATION,
@@ -192,7 +192,7 @@ export class InCallState extends BaseState {
                         try {
                             // Loguer pour voir si la fonction est appelée
                             console.log(
-                                'Calling window.startRecording function...',
+                                'Calling window.startRecording function (AUDIO ONLY)...',
                             )
 
                             const result = await w.startRecording(

@@ -277,87 +277,9 @@ export class RecordingState extends BaseState {
     }
 
     private async stopVideoRecording(): Promise<void> {
-        if (!this.context.backgroundPage) {
-            console.error(
-                'Background page not available for stopping video recording',
-            )
-            return
-        }
-
-        try {
-            // Check if the function exists first
-            const functionExists = await this.context.backgroundPage.evaluate(
-                () => {
-                    const w = window as any
-                    return {
-                        stopMediaRecorderExists:
-                            typeof w.stopMediaRecorder === 'function',
-                        recordExists: typeof w.record !== 'undefined',
-                        recordStopExists:
-                            w.record && typeof w.record.stop === 'function',
-                    }
-                },
-            )
-
-            console.log('Stop functions status:', functionExists)
-
-            if (functionExists.stopMediaRecorderExists) {
-                // 1. Stop media recording with detailed diagnostics
-                await this.context.backgroundPage.evaluate(() => {
-                    const w = window as any
-                    try {
-                        console.log('Calling stopMediaRecorder...')
-                        const result = w.stopMediaRecorder()
-                        console.log(
-                            'stopMediaRecorder called successfully, result:',
-                            result,
-                        )
-                        return result
-                    } catch (error) {
-                        console.error('Error in stopMediaRecorder:', error)
-                        // Try to display more details about the error
-                        console.error(
-                            'Error details:',
-                            JSON.stringify(
-                                error,
-                                Object.getOwnPropertyNames(error),
-                            ),
-                        )
-                        throw error
-                    }
-                })
-            } else {
-                console.warn(
-                    'stopMediaRecorder function not found in window object',
-                )
-
-                // Direct workaround attempt with MediaRecorder if available
-                try {
-                    await this.context.backgroundPage.evaluate(() => {
-                        const w = window as any
-                        if (
-                            w.MEDIA_RECORDER &&
-                            w.MEDIA_RECORDER.state !== 'inactive'
-                        ) {
-                            console.log(
-                                'Attempting direct stop of MEDIA_RECORDER',
-                            )
-                            w.MEDIA_RECORDER.stop()
-                            return true
-                        }
-                        return false
-                    })
-                } catch (directStopError) {
-                    console.error(
-                        'Failed direct stop attempt:',
-                        directStopError,
-                    )
-                }
-            }
-        } catch (error) {
-            console.error('Failed to stop video recording:', error)
-            throw error
-        }
+        // VIDEO RECORDING DISABLED - No MediaRecorder to stop
+        console.log('Video recording disabled - no MediaRecorder to stop')
+        return Promise.resolve()
     }
 
     private async stopAudioStreaming(): Promise<void> {
