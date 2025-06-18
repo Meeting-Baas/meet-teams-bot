@@ -39,7 +39,8 @@ echo "- Bot Name: $BOT_NAME"
 echo "- Bot UUID: $BOT_UUID"
 echo ""
 
-# Build first, then run
-npm --prefix chrome_extension run build-dev
+# Build the server
 npm run build
+
+# Run the serverless bot
 echo "$STDIN" | SERVERLESS=true npm run start-serverless 

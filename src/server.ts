@@ -4,13 +4,12 @@ import * as redis from 'redis'
 
 import { execSync } from 'child_process'
 import { SoundContext, VideoContext } from './media_context'
-import { MessageToBroadcast, SpeakerData, StopRecordParams } from './types'
+import { StopRecordParams } from './types'
 
 import axios from 'axios'
 import { unlinkSync } from 'fs'
 import { MeetingHandle } from './meeting'
-import { TRANSCODER } from './recording/Transcoder'
-import { SpeakerManager } from './speaker-manager'
+
 import { RecordingEndReason } from './state-machine/types'
 
 const HOST = '0.0.0.0'
@@ -24,18 +23,10 @@ clientRedis.on('error', (err) => {
     console.error('Redis error:', err)
 })
 
-const MEET_ORIGINS = [
-    'https://meet.google.com',
-    'https://meet.googleapis.com',
-    'https://meetings.googleapis.com',
-    'https://teams.microsoft.com',
-    'https://teams.live.com',
-]
+
 async function getAllowedOrigins(): Promise<string[]> {
     return [
         process.env.ALLOWED_ORIGIN,
-        'http://localhost:3005',
-        ...MEET_ORIGINS,
     ]
 }
 
@@ -88,24 +79,6 @@ export async function server() {
         res.sendStatus(204)
     })
 
-    // Console log message (into logs)
-    app.post('/broadcast_message', async (req, res) => {
-        const message: MessageToBroadcast = req.body
-        console.log('Message received from extension :', message)
-        res.status(200).json({})
-    })
-
-    // Speakers event from All providers : Write logs and send data to extension
-    app.post('/add_speaker', async (req, res) => {
-        try {
-            const speakers: SpeakerData[] = req.body
-            await SpeakerManager.getInstance().handleSpeakerUpdate(speakers)
-            res.status(200).send('ok')
-        } catch (error) {
-            console.error('Error in add_speaker route:', error)
-            res.status(500).send('Internal server error')
-        }
-    })
     // Leave bot request from api server
     app.post('/stop_record', async (req, res) => {
         const data: StopRecordParams = req.body
@@ -118,45 +91,6 @@ export async function server() {
         }
 
         stop_record(res, RecordingEndReason.ApiRequest)
-    })
-
-    //logger zoom
-    app.post('/logs', (req, res) => {
-        // console.log('logs from zoom', req.body)
-        const { level, message, timestamp } = req.body
-
-        // Function to colorize logs in terminal
-        function colorLog(level, message, timestamp) {
-            switch (level) {
-                case 'warn':
-                    console.warn(
-                        '\x1b[33m%s\x1b[0m',
-                        `[WARN] ${timestamp}: ${message}`,
-                    )
-                    break
-                case 'info':
-                    console.info(
-                        '\x1b[36m%s\x1b[0m',
-                        `[INFO] ${timestamp}: ${message}`,
-                    )
-                    break
-                case 'error':
-                    console.error(
-                        '\x1b[31m%s\x1b[0m',
-                        `[ERROR] ${timestamp}: ${message}`,
-                    )
-                    break
-                default:
-                    console.log(
-                        '\x1b[0m%s\x1b[0m',
-                        `[LOG] ${timestamp}: ${message}`,
-                    )
-            }
-        }
-
-        colorLog(level, message, timestamp)
-
-        res.sendStatus(200)
     })
 
     async function stop_record(res: any, reason: RecordingEndReason) {
@@ -318,60 +252,6 @@ export async function server() {
         result.status(200).json({
             ok: 'Ressource on playing...',
         })
-    })
-
-    // Unused ?
-    app.get('/shutdown', async (_req, res) => {
-        console.warn('Shutdown requested')
-        res.send('ok')
-        process.exit(0)
-    })
-
-    // In server.ts, we receive chunks but there is no logging
-    app.post('/transcoder/upload_chunk', async (req, res) => {
-        return await uploadChunk(req, res, false)
-    })
-
-    async function uploadChunk(req: any, res: any, isFinal: boolean) {
-        if (!req.body || !Buffer.isBuffer(req.body)) {
-            console.log('Invalid chunk received:', typeof req.body)
-            return res.status(400).json({ error: 'Invalid chunk format' })
-        }
-
-        console.log('Chunk received:', {
-            size: req.body.length,
-            isFinal,
-            timestamp: Date.now(),
-        })
-
-        try {
-            await TRANSCODER.uploadChunk(req.body, isFinal)
-            return res
-                .status(200)
-                .json({ message: 'Chunk uploaded successfully' })
-        } catch (err) {
-            console.error('Error uploading chunk:', err)
-            return res.status(500).json({ error: 'Chunk upload failed' })
-        }
-    }
-
-    app.post('/transcoder/upload_chunk_final', async (req, res) => {
-        return await uploadChunk(req, res, true)
-    })
-
-    // Stop Transcoder
-    app.post('/transcoder/stop', async (req, res) => {
-        await TRANSCODER.stop()
-            .catch((e) => {
-                res.status(500).json({
-                    message: `Error occured when stoping transcoder: ${e}`,
-                })
-            })
-            .then(() => {
-                res.status(200).json({
-                    message: 'Transcoder successfuly stoped',
-                })
-            })
     })
 
     try {

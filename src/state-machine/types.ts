@@ -3,6 +3,7 @@ import { MeetingParams } from '../types'
 import { BrowserContext, Page } from '@playwright/test'
 import { BrandingHandle } from '../branding'
 import { MeetingHandle } from '../meeting'
+import { ScreenRecorder } from '../recording/ScreenRecorder'
 import { Streaming } from '../streaming'
 import { MeetingProviderInterface } from '../types'
 import { PathManager } from '../utils/PathManager'
@@ -79,6 +80,15 @@ export interface MeetingContext {
 
     // Streaming
     streamingService?: Streaming
+
+    // Screen recording
+    screenRecorder?: ScreenRecorder
+
+    // Speakers observation
+    speakersObserver?: import('../meeting/speakersObserver').SpeakersObserver
+
+    // HTML cleanup
+    htmlCleaner?: import('../meeting/htmlCleaner').HtmlCleaner
 
     errorTime?: number
     hasResumed?: boolean

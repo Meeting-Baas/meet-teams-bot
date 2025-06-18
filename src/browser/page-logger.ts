@@ -1,17 +1,5 @@
 import { Page } from '@playwright/test'
-
-// List of URLs to ignore for errors
-const IGNORED_URLS = [
-    'api.flightproxy.teams.microsoft.com',
-    'broker.skype.com',
-    'meet.google.com/$rpc/google.rtc.meetings.v1.MeetingDeviceService/UpdateMeetingDevice',
-]
-
-// List of errors to ignore
-const IGNORED_ERRORS = [
-    'net::ERR_ABORTED',
-    'Unhandled error/rejection {"isTrusted":true}',
-]
+import { DEBUG_LOGS } from '../main'
 
 const formatValue = (value: any): string => {
     if (value === null) return 'null'
@@ -26,33 +14,17 @@ const formatValue = (value: any): string => {
     return String(value)
 }
 
-const shouldIgnoreError = (url: string, errorText?: string): boolean => {
-    if (IGNORED_URLS.some((ignoredUrl) => url.includes(ignoredUrl))) {
-        return true
-    }
-    if (
-        errorText &&
-        IGNORED_ERRORS.some((ignoredError) => errorText.includes(ignoredError))
-    ) {
-        return true
-    }
-    return false
-}
-
 export function listenPage(page: Page) {
     page.on('console', async (message) => {
         try {
             const text = message.text()
             const location = message.location()
 
-            // Ignore messages if URL is in IGNORED_URLS list
-            if (shouldIgnoreError(location.url)) {
-                return
-            }
-
-            // Ignore certain known error messages
-            if (IGNORED_ERRORS.some((err) => text.includes(err))) {
-                return
+            // Only show DEBUG logs when --debug flag is used
+            const isDebugLog = text.includes('DEBUG')
+            
+            if (!DEBUG_LOGS || !isDebugLog) {
+                return // Skip all logs unless --debug is enabled and log contains DEBUG
             }
 
             const args = await Promise.all(
@@ -102,24 +74,7 @@ export function listenPage(page: Page) {
         }
     })
 
-    // Écouter les erreurs de page
-    page.on('pageerror', (error) => {
-        if (!shouldIgnoreError(page.url(), error.message)) {
-            console.error(`Page Error:`, error)
-        }
-    })
-
-    // Écouter les requêtes qui échouent
-    page.on('requestfailed', (request) => {
-        const failure = request.failure()
-        const url = request.url()
-        if (!shouldIgnoreError(url, failure?.errorText)) {
-            console.error(
-                `Request Failed: ${url}`,
-                failure ? `\nReason: ${failure.errorText}` : '',
-            )
-        }
-    })
+    // Focus on DEBUG logs only - no other error monitoring
 }
 
 export function removeListenPage(page: Page) {

@@ -29,5 +29,4 @@ build/
 
 # Misc
 .DS_Store
-extension_id.txt
 buildInfo.json

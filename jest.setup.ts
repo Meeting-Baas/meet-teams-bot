@@ -11,8 +11,5 @@ jest.mock('./src/browser', () => ({
     utils: {
         listenPage: jest.fn(),
         removeListenPage: jest.fn(),
-        getCachedExtensionId: jest.fn(),
-        getExtensionId: jest.fn(),
-        reload_extension: jest.fn(),
     },
 }))

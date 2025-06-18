@@ -53,7 +53,6 @@ export type MeetingParams = {
     event?: { id: number }
     agenda?: any
     bot_branding: boolean
-    has_installed_extension: boolean
     custom_branding_bot_path?: string
     vocabulary: string[]
     force_lang: boolean
@@ -113,20 +112,11 @@ export type StopRecordParams = {
     user_id: number
 }
 
-export type MessageToBroadcast = {
-    message_type: string
-    data: object
-}
-
 export type SpeakerData = {
     name: string
     id: number
     timestamp: number
     isSpeaking: boolean
-}
-
-export interface MessageData {
-    msg: SpeakerData[]
 }
 export type MeetingProvider = 'Meet' | 'Teams' | 'Zoom'
 

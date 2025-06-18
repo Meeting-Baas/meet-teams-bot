@@ -47,9 +47,6 @@ cd meet-teams-bot
 # Install dependencies
 npm install
 
-# Generate browser extension key
-npm run generate_extension_key
-
 # Build the application
 npm run build
 ```
@@ -188,16 +185,16 @@ When working with the state machine:
 ├── src/
 │   ├── api/               # API endpoints and methods
 │   ├── browser/           # Browser automation
-│   ├── meeting/           # Platform-specific implementations
-│   │   ├── meet.ts       # Google Meet
-│   │   ├── teams.ts      # Microsoft Teams
-│   │   └── zoom.ts       # Zoom
+│   ├── meeting/           # Platform-specific implementations and integrated features
+│   │   ├── meet/         # Google Meet implementation
+│   │   ├── teams/        # Microsoft Teams implementation
+│   │   ├── speakersObserver.ts  # Integrated speakers detection
+│   │   └── htmlCleaner.ts       # Integrated HTML cleanup
 │   ├── recording/         # Media recording and processing
 │   ├── state-machine/     # Bot state management
 │   ├── utils/             # Utility functions
 │   ├── main.ts           # Application entry point
 │   └── types.ts          # TypeScript definitions
-├── chrome_extension/      # Browser extension
 ├── tests/                 # Test files
 └── docs/                  # Documentation
 ```

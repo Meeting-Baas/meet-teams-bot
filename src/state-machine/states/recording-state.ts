@@ -9,7 +9,8 @@ import {
 } from '../types'
 import { BaseState } from './base-state'
 
-import { TRANSCODER } from '../../recording/Transcoder'
+import { RECORDING } from '../../main'
+import { SCREEN_RECORDER } from '../../recording/ScreenRecorder'
 import { PathManager } from '../../utils/PathManager'
 
 // Sound level threshold for considering activity (0-100)
@@ -89,8 +90,8 @@ export class RecordingState extends BaseState {
     private async initializeRecording(): Promise<void> {
         console.info('Initializing recording...')
 
-        // Start streaming if available
-        if (this.context.streamingService) {
+        // Start streaming seulement si RECORDING est activé
+        if (RECORDING && this.context.streamingService) {
             console.info('Starting streaming service from recording state')
             this.context.streamingService.start()
 
@@ -102,6 +103,8 @@ export class RecordingState extends BaseState {
                 // If the instance is not available after starting, we might have a problem
                 Streaming.instance = this.context.streamingService
             }
+        } else if (!RECORDING) {
+            console.info('RECORDING disabled - skipping streaming service initialization')
         } else {
             console.warn('No streaming service available in context')
         }
@@ -111,7 +114,7 @@ export class RecordingState extends BaseState {
             hasPathManager: !!this.context.pathManager,
             hasStreamingService: !!this.context.streamingService,
             isStreamingInstanceAvailable: !!Streaming.instance,
-            isTranscoderConfigured: TRANSCODER.getStatus().isConfigured,
+            isScreenRecorderConfigured: RECORDING ? SCREEN_RECORDER.getStatus().isConfigured : 'N/A (RECORDING disabled)',
         })
 
         // Configure listeners
@@ -122,23 +125,22 @@ export class RecordingState extends BaseState {
     private async setupEventListeners(): Promise<void> {
         console.info('Setting up event listeners...')
 
-        TRANSCODER.on('chunkProcessed', async (chunkInfo) => {
-            try {
-                console.info('Received chunk for transcription:', {
-                    startTime: chunkInfo.startTime,
-                    endTime: chunkInfo.endTime,
-                    hasAudioUrl: !!chunkInfo.audioUrl,
-                })
-            } catch (error) {
-                console.error('Error during transcription:', error)
-            }
-        })
+        // Seulement configurer les event listeners du screen recorder si RECORDING est activé
+        if (RECORDING) {
+            SCREEN_RECORDER.on('error', async (error) => {
+                console.error('ScreenRecorder error:', error)
+                this.context.error = error
+                this.isProcessing = false
+            })
 
-        TRANSCODER.on('error', async (error) => {
-            console.error('Recording error:', error)
-            this.context.error = error
-            this.isProcessing = false
-        })
+            SCREEN_RECORDER.on('stopped', async () => {
+                console.info('ScreenRecorder stopped - recording completed')
+            })
+            
+            console.info('ScreenRecorder event listeners configured')
+        } else {
+            console.info('RECORDING disabled - skipping screen recorder event listeners')
+        }
 
         console.info('Event listeners setup complete')
     }
@@ -255,12 +257,20 @@ export class RecordingState extends BaseState {
                 )
             })
 
-            console.info('Stopping transcoder')
+            console.info('Stopping screen recorder')
             try {
-                await TRANSCODER.stop()
+                // 🍎 MAC TESTING: Skip screen recording stop for Mac local testing
+                if (process.env.DISABLE_RECORDING === 'true' || process.platform === 'darwin') {
+                    console.log('🍎 Screen recording disabled for Mac - nothing to stop')
+                } else if (RECORDING && SCREEN_RECORDER.isCurrentlyRecording()) {
+                    await SCREEN_RECORDER.stopRecording()
+                    console.info('ScreenRecorder stopped successfully')
+                } else {
+                    console.info('RECORDING disabled or not recording - skipping screen recorder stop')
+                }
             } catch (error) {
                 console.error(
-                    'Error stopping transcoder, continuing cleanup:',
+                    'Error stopping screen recorder, continuing cleanup:',
                     error,
                 )
             }
@@ -277,105 +287,40 @@ export class RecordingState extends BaseState {
     }
 
     private async stopVideoRecording(): Promise<void> {
-        if (!this.context.backgroundPage) {
-            console.error(
-                'Background page not available for stopping video recording',
-            )
+        if (!RECORDING) {
+            console.log('RECORDING disabled - skipping video recording stop')
             return
         }
 
-        try {
-            // Check if the function exists first
-            const functionExists = await this.context.backgroundPage.evaluate(
-                () => {
-                    const w = window as any
-                    return {
-                        stopMediaRecorderExists:
-                            typeof w.stopMediaRecorder === 'function',
-                        recordExists: typeof w.record !== 'undefined',
-                        recordStopExists:
-                            w.record && typeof w.record.stop === 'function',
-                    }
-                },
-            )
-
-            console.log('Stop functions status:', functionExists)
-
-            if (functionExists.stopMediaRecorderExists) {
-                // 1. Stop media recording with detailed diagnostics
-                await this.context.backgroundPage.evaluate(() => {
-                    const w = window as any
-                    try {
-                        console.log('Calling stopMediaRecorder...')
-                        const result = w.stopMediaRecorder()
-                        console.log(
-                            'stopMediaRecorder called successfully, result:',
-                            result,
-                        )
-                        return result
-                    } catch (error) {
-                        console.error('Error in stopMediaRecorder:', error)
-                        // Try to display more details about the error
-                        console.error(
-                            'Error details:',
-                            JSON.stringify(
-                                error,
-                                Object.getOwnPropertyNames(error),
-                            ),
-                        )
-                        throw error
-                    }
-                })
-            } else {
-                console.warn(
-                    'stopMediaRecorder function not found in window object',
-                )
-
-                // Direct workaround attempt with MediaRecorder if available
-                try {
-                    await this.context.backgroundPage.evaluate(() => {
-                        const w = window as any
-                        if (
-                            w.MEDIA_RECORDER &&
-                            w.MEDIA_RECORDER.state !== 'inactive'
-                        ) {
-                            console.log(
-                                'Attempting direct stop of MEDIA_RECORDER',
-                            )
-                            w.MEDIA_RECORDER.stop()
-                            return true
-                        }
-                        return false
-                    })
-                } catch (directStopError) {
-                    console.error(
-                        'Failed direct stop attempt:',
-                        directStopError,
-                    )
+        // Utiliser ScreenRecorder pour arrêter l'enregistrement
+        if (this.context.screenRecorder) {
+            try {
+                if (this.context.screenRecorder.isCurrentlyRecording()) {
+                    console.log('Stopping screen recording via ScreenRecorder...')
+                    await this.context.screenRecorder.stopRecording()
+                    console.log('Screen recording stopped successfully')
+                } else {
+                    console.log('Screen recording was not active')
                 }
+                return
+            } catch (error) {
+                console.error('Error stopping screen recording:', error)
+                throw error
             }
-        } catch (error) {
-            console.error('Failed to stop video recording:', error)
-            throw error
+        } else {
+            console.warn('ScreenRecorder not available - recording may not have been properly started')
         }
     }
 
     private async stopAudioStreaming(): Promise<void> {
-        if (!this.context.backgroundPage) {
-            console.error('Background page not available for stopping audio')
+        if (!RECORDING) {
+            console.info('RECORDING disabled - skipping audio streaming stop')
             return
         }
 
-        try {
-            await this.context.backgroundPage.evaluate(() => {
-                const w = window as any
-                return w.stopAudioStreaming()
-            })
-            console.info('Audio streaming stopped successfully')
-        } catch (error) {
-            console.error('Failed to stop audio streaming:', error)
-            throw error
-        }
+        // Audio streaming is now handled directly by ScreenRecorder
+        // No need to stop via extension anymore
+        console.info('Audio streaming stop handled by ScreenRecorder - no extension call needed')
     }
 
     private async checkBotRemoved(): Promise<boolean> {
@@ -458,6 +403,11 @@ export class RecordingState extends BaseState {
      * @returns true if the meeting should end due to absence of sound
      */
     private checkNoSpeaker(now: number): boolean {
+        // Si RECORDING=false, pas de streaming audio donc pas de vérification de son
+        if (!RECORDING) {
+            return false
+        }
+
         const noSpeakerDetectedTime = this.context.noSpeakerDetectedTime || 0
 
         // If no silence period has been detected, no need to end
@@ -504,3 +454,4 @@ export class RecordingState extends BaseState {
         return new Promise((resolve) => setTimeout(resolve, ms))
     }
 }
+

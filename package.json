@@ -4,11 +4,11 @@
     "description": "Automated meeting recording bot for Google Meet, Microsoft Teams, and Zoom",
     "keywords": ["meeting", "recording", "bot", "automation", "google-meet", "teams", "zoom", "playwright"],
     "engines": {
-        "node": ">= 14.16 <=18"
+        "node": ">= 18.0.0 <=20"
     },
     "dependencies": {
-        "@playwright/test": "1.50.1",
-        "playwright": "1.50.1",
+        "@playwright/test": "^1.52.0",
+        "playwright": "^1.52.0",
         "@types/sharp": "^0.31.1",
         "amqplib": "^0.10.3",
         "async": "^3.2.6",
@@ -16,7 +16,6 @@
         "express": "4.17.1",
         "fs": "^0.0.1-security",
         "jsdom": "24.0.0",
-        "node": "16.14.0",
         "node-fetch": "^2.7.0",
         "path": "^0.12.7",
         "ramda": "0.29.1",
@@ -51,7 +50,6 @@
     "scripts": {
         "start": "node build/src/main.js",
         "start-serverless": "SERVERLESS=true node build/src/main.js",
-        "generate_extension_key": "ts-node src/browser/generate-extension-key.ts",
         "clean": "rimraf coverage build tmp",
         "build": "echo '{\"buildDate\": \"'$(date -u +'%Y-%m-%dT%H:%M:%SZ')'\"}' > src/buildInfo.json && ./node_modules/typescript/bin/tsc --skipLibCheck -p tsconfig.release.json",
         "watch": "./node_modules/typescript/bin/tsc --skipLibCheck -w -p tsconfig.release.json",
@@ -72,6 +70,6 @@
     },
     "homepage": "https://github.com/yourusername/meet-teams-bot#readme",
     "volta": {
-        "node": "14.16.1"
+        "node": "20.18.0"
     }
 }

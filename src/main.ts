@@ -31,6 +31,15 @@ import {
     uploadLogsToS3,
 } from './utils/Logger'
 
+// Configuration pour activer/désactiver l'enregistrement
+export const RECORDING = process.env.RECORDING === 'true' // Par défaut false, true si RECORDING=true
+
+// Configuration pour activer/désactiver les logs DEBUG
+export const DEBUG_LOGS = process.argv.includes('--debug') || process.env.DEBUG_LOGS === 'true'
+if (DEBUG_LOGS) {
+    console.log('🐛 DEBUG mode activated - speakers debug logs will be shown')
+}
+
 const ZOOM_SDK_DEBUG_EXECUTABLE_PATHNAME = './target/debug/client-zoom'
 const ZOOM_SDK_RELEASE_EXECUTABLE_PATHNAME = './target/release/client-zoom'
 const ZOOM_SDK_LIBRARY_PATH = './dependencies/zoom-sdk-linux-rs/zoom-meeting-sdk-linux'
